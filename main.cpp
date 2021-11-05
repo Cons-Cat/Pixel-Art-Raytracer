@@ -3,6 +3,15 @@
 #include <iostream>
 #include <liblava/lava.hpp>
 
+#include <unistd.h>
+auto get_exe_path() -> std::string {
+  std::array<char, PATH_MAX - NAME_MAX> result{};
+  ssize_t count =
+      readlink("/proc/self/exe", result.data(), PATH_MAX - NAME_MAX);
+  std::string full_path = std::string(result.data());
+  return std::string(full_path.substr(0, full_path.find_last_of('/'))) + "/";
+}
+
 struct AssembledVertex {
   float position[3];
 };
@@ -18,11 +27,13 @@ auto main() -> int {
 
   app.on_create = [&]() {
     pipeline = make_graphics_pipeline(app.device);
-    pipeline->add_shader(lava::file_data("res/vertex.spv"),
-                         VK_SHADER_STAGE_VERTEX_BIT);
+    pipeline->add_shader(
+        lava::file_data(get_exe_path() + "../../res/vertex.spv"),
+        VK_SHADER_STAGE_VERTEX_BIT);
 
-    pipeline->add_shader(lava::file_data("res/fragment.spv"),
-                         VK_SHADER_STAGE_FRAGMENT_BIT);
+    pipeline->add_shader(
+        lava::file_data(get_exe_path() + "../../res/fragment.spv"),
+        VK_SHADER_STAGE_FRAGMENT_BIT);
 
     pipeline->add_color_blend_attachment();
 
