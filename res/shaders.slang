@@ -1,3 +1,7 @@
+[shader("compute")]
+void compute_main() {
+}
+
 // Output from vertex shader.
 struct VertexStageOutput {
     float4 sv_position : SV_Position;
@@ -10,8 +14,8 @@ struct VertexStageOutput {
 [shader("vertex")]
 VertexStageOutput vertex_main(uint vertex_id : SV_VertexID) {
 	// Transfom the first three verts into a triangle.
-	uint2 out_uv = float2((vertex_id << 1) & 2, vertex_id & 2);
-	float4 sv_position = float4(out_uv * 2.0 - 1.0, 0.0, 1.0);
+	uint2 out_uv = float2((vertex_id << 1) & 2, vertex_id & 2) / 3.0;
+	float4 sv_position = float4(out_uv * 2.0 - 1.0, 0.0, 1.0) ;
     return VertexStageOutput(sv_position);
 }
 
