@@ -181,22 +181,6 @@ auto main() -> int {
 
     // Hard-code draw of three verts.
     raster_pipeline->on_process = [&](VkCommandBuffer cmd_buf) {
-      // Wait on the compute shader to finish.
-      VkImageMemoryBarrier image_memory_barrier = {
-          .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
-          .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
-          .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
-          .oldLayout = VK_IMAGE_LAYOUT_GENERAL,
-          .newLayout = VK_IMAGE_LAYOUT_GENERAL,
-          .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-          .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
-          .image = storage_image.get(),
-          .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
-      };
-      vkCmdPipelineBarrier(cmd_buf, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
-                           VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr,
-                           0, nullptr, 1, &image_memory_barrier);
-
       raster_pipeline_layout->bind(cmd_buf, shared_descriptor_set);
       app.device->call().vkCmdDraw(cmd_buf, 3, 1, 0, 0);
     };
@@ -218,6 +202,22 @@ auto main() -> int {
         cmd_buf, shared_descriptor_set_compute, 0, {},
         VK_PIPELINE_BIND_POINT_COMPUTE);
     vkCmdDispatch(cmd_buf, width / workgroup_size, height / workgroup_size, 1);
+
+    // Wait on the compute shader to finish.
+    VkImageMemoryBarrier image_memory_barrier = {
+        .sType = VK_STRUCTURE_TYPE_IMAGE_MEMORY_BARRIER,
+        .srcAccessMask = VK_ACCESS_SHADER_WRITE_BIT,
+        .dstAccessMask = VK_ACCESS_SHADER_READ_BIT,
+        .oldLayout = VK_IMAGE_LAYOUT_GENERAL,
+        .newLayout = VK_IMAGE_LAYOUT_GENERAL,
+        .srcQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .dstQueueFamilyIndex = VK_QUEUE_FAMILY_IGNORED,
+        .image = storage_image.get(),
+        .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
+    };
+    vkCmdPipelineBarrier(cmd_buf, VK_PIPELINE_STAGE_COMPUTE_SHADER_BIT,
+                         VK_PIPELINE_STAGE_FRAGMENT_SHADER_BIT, 0, 0, nullptr,
+                         0, nullptr, 1, &image_memory_barrier);
   };
 
   app.on_update = [&](lava::delta dt) {
