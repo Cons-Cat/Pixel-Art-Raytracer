@@ -60,17 +60,6 @@ auto main() -> int {
         0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT);
     image_descriptor_layout_compute->create(app.device);
 
-    // Create compute pipeline.
-    compute_pipeline = lava::make_compute_pipeline(app.device);
-    compute_pipeline_layout = lava::make_pipeline_layout();
-    compute_pipeline_layout->add_descriptor(image_descriptor_layout_compute);
-    compute_pipeline_layout->create(app.device);
-    compute_pipeline->set_layout(compute_pipeline_layout);
-    compute_pipeline->set_shader_stage(
-        lava::file_data(get_exe_path() + "../../res/compute.spv"),
-        VK_SHADER_STAGE_COMPUTE_BIT);
-    compute_pipeline->create();
-
     storage_image.create(app.device, {width, height});
 
     lava::block block;
@@ -142,6 +131,7 @@ auto main() -> int {
         .pImageInfo = &descriptor_image_info,
     };
 
+    // TODO: Should be able to reuse shared_descriptor_set instead.
     // Create the descriptor set.
     shared_descriptor_set_compute =
         image_descriptor_layout_compute->allocate(descriptor_pool->get());
@@ -156,6 +146,17 @@ auto main() -> int {
 
     app.device->vkUpdateDescriptorSets(
         {write_desc_storage_image, write_desc_storage_image_compute});
+
+    // Create compute pipeline.
+    compute_pipeline = lava::make_compute_pipeline(app.device);
+    compute_pipeline_layout = lava::make_pipeline_layout();
+    compute_pipeline_layout->add_descriptor(image_descriptor_layout_compute);
+    compute_pipeline_layout->create(app.device);
+    compute_pipeline->set_layout(compute_pipeline_layout);
+    compute_pipeline->set_shader_stage(
+        lava::file_data(get_exe_path() + "../../res/compute.spv"),
+        VK_SHADER_STAGE_COMPUTE_BIT);
+    compute_pipeline->create();
 
     // Make raster pipeline.
     raster_pipeline = lava::make_graphics_pipeline(app.device);
@@ -213,8 +214,9 @@ auto main() -> int {
 
   app.on_process = [&](VkCommandBuffer cmd_buf, lava::index) {
     compute_pipeline->bind(cmd_buf);
-    compute_pipeline_layout->bind_descriptor_set(cmd_buf,
-                                                 shared_descriptor_set_compute);
+    compute_pipeline_layout->bind_descriptor_set(
+        cmd_buf, shared_descriptor_set_compute, 0, {},
+        VK_PIPELINE_BIND_POINT_COMPUTE);
     vkCmdDispatch(cmd_buf, width / workgroup_size, height / workgroup_size, 1);
   };
 
