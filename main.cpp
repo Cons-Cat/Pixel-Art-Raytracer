@@ -80,7 +80,7 @@ auto main() -> int {
 
     block.create(app.device, 1, app.device->graphics_queue().family);
 
-    block.add_command([&](VkCommandBuffer cmd_buf) {
+    auto id = block.add_command([&](VkCommandBuffer cmd_buf) {
       lava::set_image_layout(
           app.device, cmd_buf, storage_image.get(), VK_IMAGE_ASPECT_COLOR_BIT,
           VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
@@ -88,6 +88,30 @@ auto main() -> int {
     });
 
     block.process(0);
+    auto cmd_buf = block.get_command_buffer(id);
+
+    VkSubmitInfo submitInfo{
+        .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
+        .pNext = nullptr,
+        .commandBufferCount = 1,
+        .pCommandBuffers = &cmd_buf,
+    };
+    // Create fence to ensure that the command buffer has finished executing
+    VkFenceCreateInfo fenceInfo;
+    fenceInfo.pNext = nullptr;
+    fenceInfo.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
+    fenceInfo.flags = 0; // VK_FLAGS_NONE;
+    VkFence fence;
+    vkCreateFence(app.device->get(), &fenceInfo, nullptr, &fence);
+    // Submit to the queue
+    vkQueueSubmit(app.device->graphics_queue().vk_queue, 1, &submitInfo, fence);
+    // Wait for the fence to signal that command buffer has finished executing
+    vkWaitForFences(app.device->get(), 1, &fence, VK_TRUE, 100000000000);
+    vkDestroyFence(app.device->get(), fence, nullptr);
+    // if (free) {
+    //   vkFreeCommandBuffers(app.device.get(), pool, 1, &cmd_buffer);
+    // }
+    std::cout << "We made it!\n";
     block.destroy();
 
     VkImageViewCreateInfo view_info{
@@ -101,7 +125,6 @@ auto main() -> int {
     };
 
     VkImageView view;
-
     vkCreateImageView(app.device->get(), &view_info, nullptr, &view);
 
     VkDescriptorImageInfo descriptor_image_info = {
