@@ -20,10 +20,9 @@ VertexStageOutput vertex_main(uint vertex_id : SV_VertexID) {
 }
 
 [[vk::binding(0)]]
-RWTexture2D<float3> uav;
+RWTexture2D<float4> uav;
 
 [shader("fragment")]
 float4 fragment_main(VertexStageOutput vertex, float4 pixel_coord : SV_Position) : SV_Target {
-	return float4(uav.Load(pixel_coord.rg), 1);
-	return float4(1, 1, 0, 1);
+	return uav.Load(pixel_coord.xy);
 }

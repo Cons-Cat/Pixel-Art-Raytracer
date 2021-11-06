@@ -1,5 +1,3 @@
-#include "liblava/resource/format.hpp"
-#include "vulkan/vulkan_core.h"
 #include <cstdlib>
 #include <iostream>
 #include <liblava/lava.hpp>
@@ -12,10 +10,6 @@ auto get_exe_path() -> std::string {
   std::string full_path = std::string(result.data());
   return std::string(full_path.substr(0, full_path.find_last_of('/'))) + "/";
 }
-
-struct AssembledVertex {
-  float position[3];
-};
 
 auto main() -> int {
   std::cout << "Hello, user!\n";
@@ -39,9 +33,7 @@ auto main() -> int {
   // uint8_t image_data[width * height]{};
   lava::image storage_image(VK_FORMAT_R8G8B8A8_UNORM);
   storage_image.set_usage(VK_IMAGE_USAGE_SAMPLED_BIT |
-                          VK_IMAGE_USAGE_STORAGE_BIT |
-                          VK_IMAGE_USAGE_TRANSFER_DST_BIT);
-  storage_image.set_layout(VK_IMAGE_LAYOUT_UNDEFINED);
+                          VK_IMAGE_USAGE_STORAGE_BIT);
 
   /*
    * Write compute shader
@@ -84,7 +76,7 @@ auto main() -> int {
     storage_image.create(app.device, {width, height});
 
     lava::block block;
-    storage_image.set_layout(VK_IMAGE_LAYOUT_GENERAL);
+    // storage_image.set_layout(VK_IMAGE_LAYOUT_GENERAL);
 
     block.create(app.device, 1, app.device->graphics_queue().family);
 
@@ -96,18 +88,15 @@ auto main() -> int {
     });
 
     block.process(0);
+    block.destroy();
 
     VkImageViewCreateInfo view_info{
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
         .image = storage_image.get(),
         .viewType = VK_IMAGE_VIEW_TYPE_2D,
         .format = storage_image.get_format(),
-        .components =
-            {
-                VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G,
-                VK_COMPONENT_SWIZZLE_B
-                // , VK_COMPONENT_SWIZZLE_A
-            },
+        .components = {VK_COMPONENT_SWIZZLE_R, VK_COMPONENT_SWIZZLE_G,
+                       VK_COMPONENT_SWIZZLE_B, VK_COMPONENT_SWIZZLE_A},
         .subresourceRange = {VK_IMAGE_ASPECT_COLOR_BIT, 0, 1, 0, 1},
     };
 
