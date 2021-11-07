@@ -1,3 +1,4 @@
+#include <cmath>
 #include <cstdlib>
 #include <iostream>
 #include <liblava/lava.hpp>
@@ -15,8 +16,22 @@ auto get_exe_path() -> std::string {
 auto main() -> int {
   std::cout << "Hello, user!\n";
 
+  constexpr uint32_t width = 480;
+  constexpr uint32_t height = 300;
+
   lava::app app("Render");
   app.setup();
+  app.window.set_size(width, height);
+
+  uint32_t max_workgroups =
+      app.device->get_properties().limits.maxComputeWorkGroupInvocations;
+  std::cout << "Maximum workgroups: " << max_workgroups << "\n";
+  uint32_t sqrt_max_workgroups = std::sqrt(max_workgroups);
+  std::cout << "Sqrt maximum workgroups: " << sqrt_max_workgroups << "\n";
+  uint32_t workgroup_size = width * height / 64 / max_workgroups * 8;
+  std::cout << "Workgroup size: " << workgroup_size << "\n";
+
+  // workgroup_size = sqrt_max_workgroups;
 
   VkCommandPool cmd_pool;
 
@@ -32,10 +47,6 @@ auto main() -> int {
   lava::descriptor::pool::ptr descriptor_pool;
   VkDescriptorSet shared_descriptor_set = nullptr;
   VkDescriptorSet shared_descriptor_set_compute = nullptr;
-
-  constexpr uint32_t width = 256;
-  constexpr uint32_t height = 256;
-  constexpr uint32_t workgroup_size = 32;
 
   // uint8_t image_data[width * height]{};
   lava::image storage_image(VK_FORMAT_R8G8B8A8_UNORM);
