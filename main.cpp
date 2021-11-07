@@ -1,3 +1,6 @@
+#include "liblava/base/device.hpp"
+#include "vulkan/vulkan_core.h"
+#include <algorithm>
 #include <cmath>
 #include <cstdlib>
 #include <iostream>
@@ -25,13 +28,8 @@ auto main() -> int {
 
   uint32_t max_workgroups =
       app.device->get_properties().limits.maxComputeWorkGroupInvocations;
-  std::cout << "Maximum workgroups: " << max_workgroups << "\n";
-  uint32_t sqrt_max_workgroups = std::sqrt(max_workgroups);
-  std::cout << "Sqrt maximum workgroups: " << sqrt_max_workgroups << "\n";
-  uint32_t workgroup_size = width * height / 64 / max_workgroups * 8;
-  std::cout << "Workgroup size: " << workgroup_size << "\n";
-
-  VkCommandPool cmd_pool;
+  uint32_t const workgroup_width = width / 16;
+  uint32_t const workgroup_height = height / 16 + 1;
 
   lava::graphics_pipeline::ptr raster_pipeline;
   lava::pipeline_layout::ptr raster_pipeline_layout;
@@ -39,6 +37,8 @@ auto main() -> int {
   lava::compute_pipeline::ptr compute_pipeline;
   lava::pipeline_layout::ptr compute_pipeline_layout;
   lava::pipeline::shader_stage::ptr shader_stage;
+
+  VkCommandPool cmd_pool;
 
   lava::descriptor::ptr shared_descriptor_layout;
   lava::descriptor::pool::ptr descriptor_pool;
@@ -64,43 +64,16 @@ auto main() -> int {
 
     storage_image.create(app.device, {width, height});
 
-    lava::block block;
-    {
-      block.create(app.device, 1, app.device->graphics_queue().family);
-      auto id = block.add_command([&](VkCommandBuffer cmd_buf) {
-        lava::set_image_layout(
-            app.device, cmd_buf, storage_image.get(), VK_IMAGE_ASPECT_COLOR_BIT,
-            VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-      });
-      block.process(0);
-
-      // TODO: Replace this with lava's one shot command buffer.
-      {
-        auto cmd_buf_temp = block.get_command_buffer(id);
-        VkSubmitInfo submit_info{
-            .sType = VK_STRUCTURE_TYPE_SUBMIT_INFO,
-            .pNext = nullptr,
-            .commandBufferCount = 1,
-            .pCommandBuffers = &cmd_buf_temp,
-        };
-        // Create fence to ensure that the command buffer has finished
-        // executing.
-        VkFenceCreateInfo fence_info;
-        fence_info.pNext = nullptr;
-        fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-        fence_info.flags = 0;
-        VkFence fence;
-        vkCreateFence(app.device->get(), &fence_info, nullptr, &fence);
-        // Submit to the queue
-        vkQueueSubmit(app.device->graphics_queue().vk_queue, 1, &submit_info,
-                      fence);
-        // Wait for the fence to signal that command buffer has finished
-        // executing.
-        vkWaitForFences(app.device->get(), 1, &fence, VK_TRUE, 100000000000);
-        vkDestroyFence(app.device->get(), fence, nullptr);
-        block.destroy();
-      }
-    }
+    auto record_storage_image_transition = [&](VkCommandBuffer cmd_buf) {
+      lava::set_image_layout(
+          app.device, cmd_buf, storage_image.get(), VK_IMAGE_ASPECT_COLOR_BIT,
+          VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
+    };
+    app.device->vkCreateCommandPool(app.device->graphics_queue().family,
+                                    &cmd_pool);
+    lava::one_time_command_buffer(app.device, cmd_pool,
+                                  app.device->get_graphics_queue(),
+                                  record_storage_image_transition);
 
     VkImageViewCreateInfo view_info{
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -120,7 +93,7 @@ auto main() -> int {
         .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
     };
 
-    // Create the descriptor sets.
+    // Create the descriptor set.
     shared_descriptor_set =
         shared_descriptor_layout->allocate(descriptor_pool->get());
     VkWriteDescriptorSet const write_desc_storage_image{
@@ -173,8 +146,6 @@ auto main() -> int {
       raster_pipeline_layout->bind(cmd_buf, shared_descriptor_set);
       app.device->call().vkCmdDraw(cmd_buf, 3, 1, 0, 0);
     };
-
-    std::cout << "We made it!\n";
     return true;
   };
 
@@ -189,7 +160,7 @@ auto main() -> int {
     compute_pipeline->bind(cmd_buf);
     compute_pipeline_layout->bind_descriptor_set(
         cmd_buf, shared_descriptor_set, 0, {}, VK_PIPELINE_BIND_POINT_COMPUTE);
-    vkCmdDispatch(cmd_buf, width / workgroup_size, height / workgroup_size, 1);
+    vkCmdDispatch(cmd_buf, workgroup_width, workgroup_height, 1);
 
     // Wait on the compute shader to finish.
     VkImageMemoryBarrier image_memory_barrier = {
