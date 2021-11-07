@@ -28,8 +28,8 @@ auto main() -> int {
 
   uint32_t max_workgroups =
       app.device->get_properties().limits.maxComputeWorkGroupInvocations;
-  uint32_t const workgroup_width = width / 16;
-  uint32_t const workgroup_height = height / 16 + 1;
+  uint32_t const workgroup_width = width / 8;
+  uint32_t const workgroup_height = height / 8 + 1;
 
   lava::graphics_pipeline::ptr raster_pipeline;
   lava::pipeline_layout::ptr raster_pipeline_layout;

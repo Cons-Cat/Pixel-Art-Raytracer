@@ -2,22 +2,19 @@
 RWTexture2D<float4> uav;
 
 [shader("compute")]
-[numthreads(16,16,1)]
+[numthreads(8,8,1)]
 void compute_main(
     uint3 group_id : SV_GroupID,
     uint3 group_thread_id : SV_GroupThreadID,
     uint3 dispatch_thread_id : SV_DispatchThreadID,
     uint group_index : SV_GroupIndex) {
-	float even = 1;
-	if(((dispatch_thread_id.x/64 + dispatch_thread_id.y/64) % 2) == 0) {
-	    even=2;
-    }
-	// Store a color in the storage image.
+	float even = ((group_id.x + group_id.y) % 2) + 1;
+    // Store a color in the storage image.
 	uav[dispatch_thread_id.xy] = float4(
-	float(dispatch_thread_id.x)/480*even,
-	float(dispatch_thread_id.y)/300*even,
-	1,
-	1);
+        float(dispatch_thread_id.x)/480*even,
+	    float(dispatch_thread_id.y)/300*even,
+	    1,
+	    1);
 }
 
 // Output from vertex shader.
