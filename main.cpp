@@ -31,8 +31,6 @@ auto main() -> int {
   uint32_t workgroup_size = width * height / 64 / max_workgroups * 8;
   std::cout << "Workgroup size: " << workgroup_size << "\n";
 
-  // workgroup_size = sqrt_max_workgroups;
-
   VkCommandPool cmd_pool;
 
   lava::graphics_pipeline::ptr raster_pipeline;
@@ -42,16 +40,13 @@ auto main() -> int {
   lava::pipeline_layout::ptr compute_pipeline_layout;
   lava::pipeline::shader_stage::ptr shader_stage;
 
-  lava::descriptor::ptr image_descriptor_layout;
-  lava::descriptor::ptr image_descriptor_layout_compute;
+  lava::descriptor::ptr shared_descriptor_layout;
   lava::descriptor::pool::ptr descriptor_pool;
   VkDescriptorSet shared_descriptor_set = nullptr;
-  VkDescriptorSet shared_descriptor_set_compute = nullptr;
 
-  // uint8_t image_data[width * height]{};
   lava::image storage_image(VK_FORMAT_R8G8B8A8_UNORM);
-  storage_image.set_usage(VK_IMAGE_USAGE_SAMPLED_BIT |
-                          VK_IMAGE_USAGE_STORAGE_BIT);
+  // This does not have the sampled bit.
+  storage_image.set_usage(VK_IMAGE_USAGE_STORAGE_BIT);
 
   app.on_create = [&]() {
     descriptor_pool = lava::make_descriptor_pool();
@@ -61,15 +56,11 @@ auto main() -> int {
                             },
                             2);
 
-    image_descriptor_layout = lava::make_descriptor();
-    image_descriptor_layout->add_binding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-                                         VK_SHADER_STAGE_FRAGMENT_BIT);
-    image_descriptor_layout->create(app.device);
-
-    image_descriptor_layout_compute = lava::make_descriptor();
-    image_descriptor_layout_compute->add_binding(
-        0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, VK_SHADER_STAGE_COMPUTE_BIT);
-    image_descriptor_layout_compute->create(app.device);
+    shared_descriptor_layout = lava::make_descriptor();
+    shared_descriptor_layout->add_binding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
+                                          VK_SHADER_STAGE_FRAGMENT_BIT |
+                                              VK_SHADER_STAGE_COMPUTE_BIT);
+    shared_descriptor_layout->create(app.device);
 
     storage_image.create(app.device, {width, height});
 
@@ -80,7 +71,6 @@ auto main() -> int {
         lava::set_image_layout(
             app.device, cmd_buf, storage_image.get(), VK_IMAGE_ASPECT_COLOR_BIT,
             VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
-        std::cout << "Howdy\n";
       });
       block.process(0);
 
@@ -93,18 +83,19 @@ auto main() -> int {
             .commandBufferCount = 1,
             .pCommandBuffers = &cmd_buf_temp,
         };
-        // Create fence to ensure that the command buffer has finished executing
+        // Create fence to ensure that the command buffer has finished
+        // executing.
         VkFenceCreateInfo fence_info;
         fence_info.pNext = nullptr;
         fence_info.sType = VK_STRUCTURE_TYPE_FENCE_CREATE_INFO;
-        fence_info.flags = 0; // VK_FLAGS_NONE;
+        fence_info.flags = 0;
         VkFence fence;
         vkCreateFence(app.device->get(), &fence_info, nullptr, &fence);
         // Submit to the queue
         vkQueueSubmit(app.device->graphics_queue().vk_queue, 1, &submit_info,
                       fence);
         // Wait for the fence to signal that command buffer has finished
-        // executing
+        // executing.
         vkWaitForFences(app.device->get(), 1, &fence, VK_TRUE, 100000000000);
         vkDestroyFence(app.device->get(), fence, nullptr);
         block.destroy();
@@ -125,14 +116,13 @@ auto main() -> int {
     vkCreateImageView(app.device->get(), &view_info, nullptr, &view);
 
     VkDescriptorImageInfo descriptor_image_info = {
-        // .imageView = storage_image.get_view(),
         .imageView = view,
         .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
     };
 
-    // Create the descriptor set.
+    // Create the descriptor sets.
     shared_descriptor_set =
-        image_descriptor_layout->allocate(descriptor_pool->get());
+        shared_descriptor_layout->allocate(descriptor_pool->get());
     VkWriteDescriptorSet const write_desc_storage_image{
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
         .dstSet = shared_descriptor_set,
@@ -142,26 +132,14 @@ auto main() -> int {
         .pImageInfo = &descriptor_image_info,
     };
 
-    // TODO: Should be able to reuse shared_descriptor_set instead.
-    // Create the descriptor set.
-    shared_descriptor_set_compute =
-        image_descriptor_layout_compute->allocate(descriptor_pool->get());
-    VkWriteDescriptorSet const write_desc_storage_image_compute{
-        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .dstSet = shared_descriptor_set_compute,
-        .dstBinding = 0,
-        .descriptorCount = 1,
-        .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
-        .pImageInfo = &descriptor_image_info,
-    };
-
-    app.device->vkUpdateDescriptorSets(
-        {write_desc_storage_image, write_desc_storage_image_compute});
+    app.device->vkUpdateDescriptorSets({
+        write_desc_storage_image,
+    });
 
     // Create compute pipeline.
     compute_pipeline = lava::make_compute_pipeline(app.device);
     compute_pipeline_layout = lava::make_pipeline_layout();
-    compute_pipeline_layout->add_descriptor(image_descriptor_layout_compute);
+    compute_pipeline_layout->add_descriptor(shared_descriptor_layout);
     compute_pipeline_layout->create(app.device);
     compute_pipeline->set_layout(compute_pipeline_layout);
     compute_pipeline->set_shader_stage(
@@ -182,7 +160,7 @@ auto main() -> int {
     raster_pipeline->set_rasterization_front_face(
         VK_FRONT_FACE_COUNTER_CLOCKWISE);
     raster_pipeline_layout = lava::make_pipeline_layout();
-    raster_pipeline_layout->add_descriptor(image_descriptor_layout);
+    raster_pipeline_layout->add_descriptor(shared_descriptor_layout);
     raster_pipeline_layout->create(app.device);
     raster_pipeline->set_layout(raster_pipeline_layout);
     raster_pipeline->set_auto_size(true);
@@ -210,8 +188,7 @@ auto main() -> int {
   app.on_process = [&](VkCommandBuffer cmd_buf, lava::index) {
     compute_pipeline->bind(cmd_buf);
     compute_pipeline_layout->bind_descriptor_set(
-        cmd_buf, shared_descriptor_set_compute, 0, {},
-        VK_PIPELINE_BIND_POINT_COMPUTE);
+        cmd_buf, shared_descriptor_set, 0, {}, VK_PIPELINE_BIND_POINT_COMPUTE);
     vkCmdDispatch(cmd_buf, width / workgroup_size, height / workgroup_size, 1);
 
     // Wait on the compute shader to finish.
