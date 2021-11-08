@@ -1,11 +1,22 @@
-[[vk::binding(0, 0)]]
+// (Descriptor Binding, Descriptor Set)
+[vk::binding(0, 0)]
 RWTexture2D<float4> uav;
 
-[[vk::binding(1, 0)]]
-RWStructuredBuffer<Pixels> pixel_buffer_data;
+[vk::binding(1, 0)]
+RWStructuredBuffer<GpuPixelBuffer> pixel_buffer_data;
 
-struct Pixels {
-    float colors[8*8];
+struct Pixel {
+  uint8_t palette_index;
+  uint16_t normal_vector; // Three nibbles.
+  uint8_t depth;
+}
+
+struct Cell {
+    Pixel pixels[8*8];
+}
+
+struct GpuPixelBuffer {
+    Cell cells[38 * 60];
 }
 
 [shader("compute")]
@@ -20,7 +31,7 @@ void compute_main(
 	uav[dispatch_thread_id.xy] = float4(
         float(dispatch_thread_id.x)/480*even,
 	    float(dispatch_thread_id.y)/300*even,
-	    pixel_buffer_data[0].colors[0], // TODO: Delete this test.
+	    pixel_buffer_data[0].cells[0].pixels[0].palette_index, // TODO: Delete this test.
 	    1);
 }
 

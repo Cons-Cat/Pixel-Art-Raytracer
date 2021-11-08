@@ -36,7 +36,36 @@ auto main() -> int {
   constexpr uint32_t width = 480;
   constexpr uint32_t height = 300;
 
-  lava::app app("Render");
+  lava::frame_config config;
+  config.param.extensions.insert(config.param.extensions.end(),
+                                 {
+                                     "VK_KHR_get_physical_device_properties2",
+                                 });
+  lava::app app(config);
+  VkPhysicalDevice8BitStorageFeatures features_2 = {
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_8BIT_STORAGE_FEATURES,
+      .pNext = nullptr,
+      .storageBuffer8BitAccess = VK_TRUE,
+      .uniformAndStorageBuffer8BitAccess = VK_TRUE,
+  };
+  VkPhysicalDeviceShaderFloat16Int8FeaturesKHR features_1 = {
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_SHADER_FLOAT16_INT8_FEATURES,
+      .pNext = &features_2,
+      .shaderInt8 = VK_TRUE,
+  };
+  VkPhysicalDeviceFeatures2 const features = {
+      .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
+      .pNext = &features_1,
+  };
+  app.manager.on_create_param = [&](lava::device::create_param &param) {
+    param.next = &features;
+    param.extensions.insert(param.extensions.end(),
+                            {
+                                "VK_KHR_shader_float16_int8",
+                                "VK_KHR_storage_buffer_storage_class",
+                                "VK_KHR_8bit_storage",
+                            });
+  };
   app.setup();
   app.window.set_size(width, height);
 
