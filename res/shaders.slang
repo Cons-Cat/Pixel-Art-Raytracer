@@ -1,5 +1,12 @@
-[[vk::binding(0)]]
+[[vk::binding(0, 0)]]
 RWTexture2D<float4> uav;
+
+[[vk::binding(1, 0)]]
+RWStructuredBuffer<Pixels> pixel_buffer_data;
+
+struct Pixels {
+    float colors[8*8];
+}
 
 [shader("compute")]
 [numthreads(8,8,1)]
@@ -13,7 +20,7 @@ void compute_main(
 	uav[dispatch_thread_id.xy] = float4(
         float(dispatch_thread_id.x)/480*even,
 	    float(dispatch_thread_id.y)/300*even,
-	    1,
+	    pixel_buffer_data[0].colors[0], // TODO: Delete this test.
 	    1);
 }
 

@@ -1,5 +1,3 @@
-#include "liblava/base/device.hpp"
-#include "vulkan/vulkan_core.h"
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
@@ -16,6 +14,22 @@ auto get_exe_path() -> std::string {
   return std::string(full_path.substr(0, full_path.find_last_of('/'))) + "/";
 }
 
+struct Pixel {
+  uint8_t palette_index;
+  uint16_t normal_vector; // Three nibbles.
+  uint8_t depth;
+};
+
+struct Cell {
+  Pixel pixels[8 * 8];
+};
+
+// Pixel buffer data structure.
+struct GpuPixelBuffer {
+  Cell cells[38 * 60];
+} pixel_buffer_data;
+
+// Program.
 auto main() -> int {
   std::cout << "Hello, user!\n";
 
@@ -42,38 +56,70 @@ auto main() -> int {
 
   lava::descriptor::ptr shared_descriptor_layout;
   lava::descriptor::pool::ptr descriptor_pool;
-  VkDescriptorSet shared_descriptor_set = nullptr;
+  VkDescriptorSet shared_descriptor_set_image = nullptr;
+  VkDescriptorSet shared_descriptor_set_pixels = nullptr;
 
   lava::image storage_image(VK_FORMAT_R8G8B8A8_UNORM);
   // This does not have the sampled bit.
   storage_image.set_usage(VK_IMAGE_USAGE_STORAGE_BIT);
 
+  lava::buffer::ptr pixel_buffer_staging;
+  lava::buffer::ptr pixel_buffer_device;
+
   app.on_create = [&]() {
     descriptor_pool = lava::make_descriptor_pool();
     descriptor_pool->create(app.device,
-                            {
-                                {VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 2},
-                            },
+                            {{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1},
+                             {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1}},
                             2);
 
+    app.device->vkCreateCommandPool(app.device->graphics_queue().family,
+                                    &cmd_pool);
+
+    // Making image buffer.
     shared_descriptor_layout = lava::make_descriptor();
     shared_descriptor_layout->add_binding(0, VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
                                           VK_SHADER_STAGE_FRAGMENT_BIT |
                                               VK_SHADER_STAGE_COMPUTE_BIT);
+    shared_descriptor_layout->add_binding(1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+                                          VK_SHADER_STAGE_COMPUTE_BIT);
     shared_descriptor_layout->create(app.device);
 
     storage_image.create(app.device, {width, height});
 
-    auto record_storage_image_transition = [&](VkCommandBuffer cmd_buf) {
+    // Making pixel buffer.
+    pixel_buffer_staging = lava::make_buffer();
+    pixel_buffer_staging->create(
+        app.device, &pixel_buffer_data, sizeof(pixel_buffer_data),
+        VK_BUFFER_USAGE_TRANSFER_SRC_BIT, true, VMA_MEMORY_USAGE_CPU_ONLY);
+
+    pixel_buffer_device = lava::make_buffer();
+    pixel_buffer_device->create(
+        app.device, &pixel_buffer_data, sizeof(pixel_buffer_data),
+        VK_BUFFER_USAGE_TRANSFER_DST_BIT | VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
+        true, VMA_MEMORY_USAGE_GPU_ONLY);
+
+    auto fn_transfer_pixel_buffer_memory = [&](VkCommandBuffer cmd_buf) {
+      // TODO: Is there a simpler way with Liblava?
+      VkBufferCopy copy;
+      copy.dstOffset = 0;
+      copy.srcOffset = 0;
+      copy.size = sizeof(GpuPixelBuffer);
+      vkCmdCopyBuffer(cmd_buf, pixel_buffer_staging->get(),
+                      pixel_buffer_device->get(), 1, &copy);
+    };
+    lava::one_time_command_buffer(app.device, cmd_pool,
+                                  app.device->get_graphics_queue(),
+                                  fn_transfer_pixel_buffer_memory);
+
+    auto fn_record_storage_image_transition = [&](VkCommandBuffer cmd_buf) {
       lava::set_image_layout(
           app.device, cmd_buf, storage_image.get(), VK_IMAGE_ASPECT_COLOR_BIT,
           VK_IMAGE_LAYOUT_UNDEFINED, VK_IMAGE_LAYOUT_GENERAL);
     };
-    app.device->vkCreateCommandPool(app.device->graphics_queue().family,
-                                    &cmd_pool);
     lava::one_time_command_buffer(app.device, cmd_pool,
                                   app.device->get_graphics_queue(),
-                                  record_storage_image_transition);
+                                  fn_record_storage_image_transition);
 
     VkImageViewCreateInfo view_info{
         .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -93,20 +139,29 @@ auto main() -> int {
         .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
     };
 
-    // Create the descriptor set.
-    shared_descriptor_set =
+    // Create the descriptor sets.
+    shared_descriptor_set_image =
         shared_descriptor_layout->allocate(descriptor_pool->get());
     VkWriteDescriptorSet const write_desc_storage_image{
         .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-        .dstSet = shared_descriptor_set,
+        .dstSet = shared_descriptor_set_image,
         .dstBinding = 0,
         .descriptorCount = 1,
         .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
         .pImageInfo = &descriptor_image_info,
     };
+    VkWriteDescriptorSet const write_desc_storage_pixels{
+        .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+        .dstSet = shared_descriptor_set_image,
+        .dstBinding = 1,
+        .descriptorCount = 1,
+        .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
+        .pBufferInfo = pixel_buffer_device->get_descriptor_info(),
+    };
 
     app.device->vkUpdateDescriptorSets({
         write_desc_storage_image,
+        write_desc_storage_pixels,
     });
 
     // Create compute pipeline.
@@ -143,7 +198,7 @@ auto main() -> int {
 
     // Hard-code draw of three verts.
     raster_pipeline->on_process = [&](VkCommandBuffer cmd_buf) {
-      raster_pipeline_layout->bind(cmd_buf, shared_descriptor_set);
+      raster_pipeline_layout->bind(cmd_buf, shared_descriptor_set_image);
       app.device->call().vkCmdDraw(cmd_buf, 3, 1, 0, 0);
     };
     return true;
@@ -159,7 +214,8 @@ auto main() -> int {
   app.on_process = [&](VkCommandBuffer cmd_buf, lava::index) {
     compute_pipeline->bind(cmd_buf);
     compute_pipeline_layout->bind_descriptor_set(
-        cmd_buf, shared_descriptor_set, 0, {}, VK_PIPELINE_BIND_POINT_COMPUTE);
+        cmd_buf, shared_descriptor_set_image, 0, {},
+        VK_PIPELINE_BIND_POINT_COMPUTE);
     vkCmdDispatch(cmd_buf, workgroup_width, workgroup_height, 1);
 
     // Wait on the compute shader to finish.
