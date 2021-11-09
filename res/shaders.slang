@@ -3,16 +3,21 @@
 RWTexture2D<float4> uav;
 
 [vk::binding(1, 0)]
-RWStructuredBuffer<GpuPixelBuffer> pixel_buffer_data;
+RWStructuredBuffer<Cell> pixel_buffer_cells;
 
 struct Pixel {
-  uint8_t palette_index;
-  uint16_t normal_vector; // Three nibbles.
-  uint8_t depth;
+    uint32_t palette_index;
+    uint32_t depth;
+    // uint16_t empty_data; // Padding.
+
+    uint32_t screen_x;
+    uint32_t screen_y;
+    
+    // float3 normals;
 }
 
 struct Cell {
-    Pixel pixels[8*8];
+    Pixel pixels[8 * 8 * 8];
 }
 
 struct GpuPixelBuffer {
@@ -22,22 +27,53 @@ struct GpuPixelBuffer {
 [shader("compute")]
 [numthreads(8,8,1)]
 void compute_main(
-    uint3 group_id : SV_GroupID,
-    uint3 group_thread_id : SV_GroupThreadID,
-    uint3 dispatch_thread_id : SV_DispatchThreadID,
-    uint group_index : SV_GroupIndex) {
-	float even = ((group_id.x + group_id.y) % 2) + 1;
-    // Store a color in the storage image.
-	uav[dispatch_thread_id.xy] = float4(
-        float(dispatch_thread_id.x)/480*even,
-	    float(dispatch_thread_id.y)/300*even,
-	    pixel_buffer_data[0].cells[0].pixels[0].palette_index, // TODO: Delete this test.
-	    1);
+        uint3 group_id : SV_GroupID,
+        uint3 group_thread_id : SV_GroupThreadID,
+        uint3 dispatch_thread_id : SV_DispatchThreadID,
+        uint group_index : SV_GroupIndex) {
+    if (dispatch_thread_id.x > 480 || dispatch_thread_id.y > 300) {
+       // return;
+    }
+    uint min_depth = 255;
+    uint current_cell = group_id.x + group_id.y * 60;
+    uint nearest_pixel_index;
+
+    // Iterate through all pixels in the cell.
+    for (uint i = 0; i < 8 * 8 * 8; i++) {
+        Pixel current_pixel = pixel_buffer_cells[current_cell].pixels[i];
+        // 255 is a value that cannot be used safely anyways, so it is a sentinel.
+        if (current_pixel.depth == 255) {
+            // break;
+        }
+        // if (current_pixel.screen_x
+        //     == dispatch_thread_id.x
+        //  && current_pixel.screen_y
+        //     == dispatch_thread_id.y) {
+            if (current_pixel.depth < min_depth) {
+                min_depth = current_pixel.depth;
+                nearest_pixel_index = i;
+            }
+        // }
+    }
+
+    Pixel nearest_pixel = pixel_buffer_cells[current_cell]
+        .pixels[nearest_pixel_index];
+
+    if (nearest_pixel.palette_index == 0) {
+       uav[dispatch_thread_id.xy] = float4(0.9,1,0,1);
+    } else if (nearest_pixel.palette_index == 1) {
+       uav[dispatch_thread_id.xy] = float4(0.65f,0,0,1);
+    } else if (nearest_pixel.palette_index == 2) {
+       uav[dispatch_thread_id.xy] = float4(0.3f,0,1,1);
+    } else {
+       uav[dispatch_thread_id.xy] = float4(0,0,0,1);
+    }
 }
 
 // Output from vertex shader.
 struct VertexStageOutput {
     float4 sv_position : SV_Position;
+    
      __init(float4 position) {
         sv_position = position;
     }

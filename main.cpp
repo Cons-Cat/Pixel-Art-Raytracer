@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdlib>
+#include <cstring>
 #include <iostream>
 
 // Linux-specific executable path.
@@ -16,13 +17,20 @@ auto get_exe_path() -> std::string {
 }
 
 struct Pixel {
-    uint8_t palette_index;
-    uint16_t normal_vector;  // Three nibbles.
-    uint8_t depth;
+    uint32_t palette_index;
+    uint32_t depth;
+    // uint16_t empty_data;  // Padding.
+
+    uint32_t screen_x;
+    uint32_t screen_y;
+
+    // float normals[3];
 };
 
 struct Cell {
-    Pixel pixels[8 * 8];
+    // There are 8x8 pixels to display in the cell, and each of them can hold up
+    // to 4 pixels on average.
+    Pixel pixels[8 * 8 * 8];
 };
 
 // Pixel buffer data structure.
@@ -33,6 +41,26 @@ struct GpuPixelBuffer {
 // Program.
 auto main() -> int {
     std::cout << "Hello, user!\n";
+    for (uint32_t i = 0; i < 38 * 60; i++) {
+        for (uint32_t k = 0; k < 8; k++) {
+            for (uint32_t j = 0; j < 8 * 8; j++) {
+                Pixel* p_current_pixel =
+                    &pixel_buffer_data.cells[i].pixels[j + (k * 64)];
+                p_current_pixel->palette_index = 0;
+                p_current_pixel->depth = 255;
+                p_current_pixel->screen_x = (i % 60) + (j % 8);
+                p_current_pixel->screen_y = (i / 60) + (j / 8);
+
+                if (k == 0) {
+                    p_current_pixel->palette_index = 1;
+                    p_current_pixel->depth = 254;
+                } else {
+                    p_current_pixel->depth = 255;
+                    p_current_pixel->palette_index = 2;
+                }
+            }
+        }
+    }
 
     constexpr uint32_t width = 480;
     constexpr uint32_t height = 300;
@@ -72,6 +100,7 @@ auto main() -> int {
 
     uint32_t max_workgroups =
         app.device->get_properties().limits.maxComputeWorkGroupInvocations;
+    // TODO: I should hard-code this for now.
     uint32_t const workgroup_width = width / 8;
     uint32_t const workgroup_height = height / 8 + 1;
 
