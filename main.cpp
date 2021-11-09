@@ -8,6 +8,8 @@
 
 // Linux-specific executable path.
 #include <unistd.h>
+
+#include "vulkan/vulkan_core.h"
 auto get_exe_path() -> std::string {
     std::array<char, PATH_MAX - NAME_MAX> result{};
     ssize_t count =
@@ -19,44 +21,40 @@ auto get_exe_path() -> std::string {
 struct Pixel {
     uint32_t palette_index;
     uint32_t depth;
-    // uint16_t empty_data;  // Padding.
-
-    uint32_t screen_x;
-    uint32_t screen_y;
-
-    // float normals[3];
 };
 
 struct Cell {
-    // There are 8x8 pixels to display in the cell, and each of them can hold up
-    // to 4 pixels on average.
-    Pixel pixels[8 * 8 * 8];
+    // There are 4x4 containers to display in the cell, and each of them can
+    // hold up to 8 pixels.
+    Pixel pixels[4 * 4 * 8];
 };
 
 // Pixel buffer data structure.
 struct GpuPixelBuffer {
-    Cell cells[38 * 60];
-} pixel_buffer_data;
+    Cell cells[120 * 75];
+};
 
 // Program.
 auto main() -> int {
     std::cout << "Hello, user!\n";
-    for (uint32_t i = 0; i < 38 * 60; i++) {
-        for (uint32_t k = 0; k < 8; k++) {
-            for (uint32_t j = 0; j < 8 * 8; j++) {
-                Pixel* p_current_pixel =
-                    &pixel_buffer_data.cells[i].pixels[j + (k * 64)];
-                p_current_pixel->palette_index = 0;
-                p_current_pixel->depth = 255;
-                p_current_pixel->screen_x = (i % 60) + (j % 8);
-                p_current_pixel->screen_y = (i / 60) + (j / 8);
+    GpuPixelBuffer* p_pixel_buffer_data = new (std::nothrow) GpuPixelBuffer();
+
+    for (uint32_t i = 0; i < 120 * 75; i++) {
+        for (uint32_t j = 0; j < 4 * 4; j++) {
+            for (uint32_t k = 0; k < 8; k++) {
+                Pixel& current_pixel =
+                    p_pixel_buffer_data->cells[i].pixels[j * 16 + k];
+                current_pixel.palette_index = 0;
+                current_pixel.depth = 255;
 
                 if (k == 0) {
-                    p_current_pixel->palette_index = 1;
-                    p_current_pixel->depth = 254;
+                    current_pixel.palette_index = 1;
+                    current_pixel.depth = 252;
+                    continue;
                 } else {
-                    p_current_pixel->depth = 255;
-                    p_current_pixel->palette_index = 2;
+                    current_pixel.depth = 250;
+                    current_pixel.palette_index = 2;
+                    continue;
                 }
             }
         }
@@ -85,6 +83,10 @@ auto main() -> int {
     VkPhysicalDeviceFeatures2 const features = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_FEATURES_2,
         .pNext = &features_1,
+        .features =
+            {
+                .shaderInt64 = VK_TRUE,
+            },
     };
     app.manager.on_create_param = [&](lava::device::create_param& param) {
         param.next = &features;
@@ -101,8 +103,9 @@ auto main() -> int {
     uint32_t max_workgroups =
         app.device->get_properties().limits.maxComputeWorkGroupInvocations;
     // TODO: I should hard-code this for now.
-    uint32_t const workgroup_width = width / 8;
-    uint32_t const workgroup_height = height / 8 + 1;
+    uint32_t const workgroup_width = width / 4;
+    uint32_t const workgroup_height = height / 4;
+    uint32_t const workgroup_depth = 4;
 
     lava::graphics_pipeline::ptr raster_pipeline;
     lava::pipeline_layout::ptr raster_pipeline_layout;
@@ -149,12 +152,12 @@ auto main() -> int {
         // Making pixel buffer.
         pixel_buffer_staging = lava::make_buffer();
         pixel_buffer_staging->create(
-            app.device, &pixel_buffer_data, sizeof(pixel_buffer_data),
+            app.device, p_pixel_buffer_data, sizeof(GpuPixelBuffer),
             VK_BUFFER_USAGE_TRANSFER_SRC_BIT, true, VMA_MEMORY_USAGE_CPU_ONLY);
 
         pixel_buffer_device = lava::make_buffer();
-        pixel_buffer_device->create(app.device, &pixel_buffer_data,
-                                    sizeof(pixel_buffer_data),
+        pixel_buffer_device->create(app.device, p_pixel_buffer_data,
+                                    sizeof(GpuPixelBuffer),
                                     VK_BUFFER_USAGE_TRANSFER_DST_BIT |
                                         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                                     true, VMA_MEMORY_USAGE_GPU_ONLY);
@@ -279,7 +282,8 @@ auto main() -> int {
         compute_pipeline_layout->bind_descriptor_set(
             p_cmd_buf, p_shared_descriptor_set_image, 0, {},
             VK_PIPELINE_BIND_POINT_COMPUTE);
-        vkCmdDispatch(p_cmd_buf, workgroup_width, workgroup_height, 1);
+        vkCmdDispatch(p_cmd_buf, workgroup_width, workgroup_height,
+                      workgroup_depth);
 
         // Wait on the compute shader to finish.
         VkImageMemoryBarrier image_memory_barrier = {
