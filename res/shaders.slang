@@ -1,7 +1,9 @@
 // (Descriptor Binding, Descriptor Set)
-[vk::binding(0, 0)] RWTexture2D<float4> uav;
+[vk::binding(0, 0)]
+RWTexture2D<float4> uav;
 
-[vk::binding(1, 0)] RWStructuredBuffer<Cell> pixel_buffer_cells;
+[vk::binding(1, 0)]
+RWStructuredBuffer<Cell> pixel_buffer_cells;
 
 struct Pixel {
     uint32_t palette_index;
@@ -16,12 +18,12 @@ struct GpuPixelBuffer {
     Cell cells[120 * 75];
 }
 
-    [shader("compute")][numthreads(4, 4, 4)] void
-    compute_main(uint3 group_id
-                 : SV_GroupID, uint3 group_thread_id
-                 : SV_GroupThreadID, uint3 dispatch_thread_id
-                 : SV_DispatchThreadID, uint group_index
-                 : SV_GroupIndex) {
+[shader("compute")]
+[numthreads(4, 4, 4)]
+void compute_main(uint3 group_id : SV_GroupID,
+                  uint3 group_thread_id : SV_GroupThreadID,
+                  uint3 dispatch_thread_id : SV_DispatchThreadID,
+                  uint group_index : SV_GroupIndex) {
     uint min_depth = 255;
     uint current_cell = group_id.x + group_id.y * 75;
     uint nearest_pixel_index = 0;
@@ -29,7 +31,7 @@ struct GpuPixelBuffer {
     uint thread_y = dispatch_thread_id.y;
     uint thread_z = dispatch_thread_id.z;
     bool thread_is_even = dispatch_thread_id.z % 2 == 0;
-    
+
     // The last element should never try swapping with an element ahead of it.
     if (thread_z < 7) {
         // TODO: I don't think 8 is guaranteed to be enough iterations.
@@ -98,20 +100,18 @@ struct VertexStageOutput {
     }
 };
 
-[shader("vertex")] VertexStageOutput vertex_main(uint vertex_id
-                                                 : SV_VertexID) {
+[shader("vertex")]
+VertexStageOutput vertex_main(uint vertex_id : SV_VertexID) {
     // Transfom the first three verts into a triangle.
     uint2 out_uv = float2((vertex_id << 1) & 2, vertex_id & 2);
     float4 sv_position = float4(out_uv * 2.0 - 1.0, 0.0, 1.0);
     return VertexStageOutput(sv_position);
 }
 
-    [shader("fragment")] float4
-    fragment_main(VertexStageOutput vertex, float4 pixel_coord
-                  : SV_Position)
-    : SV_Target {
+[shader("fragment")] float4
+fragment_main(VertexStageOutput vertex,
+              float4 pixel_coord : SV_Position) : SV_Target {
     float4 color;
-    // float4 color = float4(1,1,1,1);
     color = uav.Load(pixel_coord.xy);
     return color;
 }
