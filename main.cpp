@@ -43,11 +43,11 @@ auto main() -> int {
         for (uint32_t j = 0; j < 4 * 4; j++) {
             for (uint32_t k = 0; k < 8; k++) {
                 Pixel& current_pixel =
-                    p_pixel_buffer_data->cells[i].pixels[j * 16 + k];
+                    p_pixel_buffer_data->cells[i].pixels[j * 8 + k];
                 current_pixel.palette_index = 0;
                 current_pixel.depth = 255;
 
-                if (k == 0) {
+                if (k == 4) {
                     current_pixel.palette_index = 1;
                     current_pixel.depth = 252;
                     continue;
