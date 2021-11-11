@@ -10,8 +10,13 @@ struct Pixel {
     uint32_t depth;
 }
 
+struct PixelArray {
+    uint32_t size;
+    Pixel pixels[8];
+};
+
 struct Cell {
-    Pixel pixels[4 * 4 * 8];
+    PixelArray pixel_buckets[4 * 4];
 }
 
 struct GpuPixelBuffer {
@@ -30,10 +35,12 @@ void compute_main(uint3 group_id : SV_GroupID,
     uint thread_y = group_thread_id.y;
     uint thread_z = group_thread_id.z;
     bool thread_is_even = dispatch_thread_id.z % 2 == 0;
-    uint bottom_pixel_index = (thread_y * 4 + thread_x) * 8;
-    uint thread_pixel_index = (thread_x + thread_y * 4) * 8 + thread_z * 2;
+    uint thread_bucket_index = (thread_x + thread_y * 4) * 8;
+    uint thread_pixel_index = thread_z * 2;
 
     // The last element should never try swapping with an element ahead of it.
+
+/* 
     if (thread_z < 3) {
         // TODO: I don't think 8 is guaranteed to be enough iterations.
         for (uint i = 0; i < 8; i++) {
@@ -43,16 +50,23 @@ void compute_main(uint3 group_id : SV_GroupID,
 
             // Odd sort:
             Pixel temp_pixel =
-                  pixel_buffer_cells[current_cell].pixels[thread_pixel_index + odd_sort];
+                  pixel_buffer_cells[current_cell].pixel_buckets[thread_bucket_index].pixels[thread_pixel_index + odd_sort];
                     
             if (pixel_buffer_cells[current_cell]
+                            .pixel_buckets[thread_bucket_index]
                             .pixels[thread_pixel_index + odd_sort + 1]
                             .depth < temp_pixel.depth) {
-                pixel_buffer_cells[current_cell].pixels[thread_pixel_index + odd_sort] =
-                    pixel_buffer_cells[current_cell]
+                pixel_buffer_cells[current_cell]
+                    .pixel_buckets[thread_bucket_index]
+                    .pixels[thread_pixel_index + odd_sort] =
+                        pixel_buffer_cells[current_cell]
+                    .pixel_buckets[thread_bucket_index]
                     .pixels[thread_pixel_index + odd_sort + 1];
-                pixel_buffer_cells[current_cell].pixels[thread_pixel_index + odd_sort + 1] =
-                    temp_pixel;
+                    
+                pixel_buffer_cells[current_cell]
+                    .pixel_buckets[thread_bucket_index]
+                    .pixels[thread_pixel_index + odd_sort + 1] =
+                        temp_pixel;
             }
 
             // Waiting is only necessary when sorting between groups.
@@ -61,10 +75,12 @@ void compute_main(uint3 group_id : SV_GroupID,
             }
         }
     }
-
+*/ 
     if (thread_z == 0) {
         // The first element is the lowest depth after sorting.
-        Pixel nearest_pixel = pixel_buffer_cells[current_cell].pixels[bottom_pixel_index];
+        Pixel nearest_pixel = pixel_buffer_cells[current_cell]
+            .pixel_buckets[thread_bucket_index]
+            .pixels[0];
 
         if (nearest_pixel.palette_index == 0) {
             uav[dispatch_thread_id.xy] = float4(0.9, 1, 0, 1);
