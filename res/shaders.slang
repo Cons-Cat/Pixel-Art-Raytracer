@@ -20,7 +20,7 @@ struct Cell {
 }
 
 struct GpuPixelBuffer {
-    Cell cells[120 * 75];
+    Cell cells[75 * 120];
 }
 
 [shader("compute")]
@@ -29,53 +29,52 @@ void compute_main(uint3 group_id : SV_GroupID,
                   uint3 group_thread_id : SV_GroupThreadID,
                   uint3 dispatch_thread_id : SV_DispatchThreadID,
                   uint group_index : SV_GroupIndex) {
-    uint min_depth = 255;
-    uint current_cell = group_id.x + group_id.y * 120;
-    uint thread_x = group_thread_id.x;
-    uint thread_y = group_thread_id.y;
-    uint thread_z = group_thread_id.z;
+    uint32_t min_depth = 255;
+    uint32_t current_cell = group_id.x + group_id.y * (480 / 4);
+    uint32_t thread_x = group_thread_id.x; // Bounded in [0, 3] 
+    uint32_t thread_y = group_thread_id.y; // Bounded in [0, 3]
+    uint32_t thread_z = group_thread_id.z; // Bounded in [0, 3]
+    uint32_t thread_bucket_index = thread_x + thread_y * 4;
+    uint32_t thread_pixel_index = thread_z * 2;
     bool thread_is_even = dispatch_thread_id.z % 2 == 0;
-    uint thread_bucket_index = (thread_x + thread_y * 4) * 8;
-    uint thread_pixel_index = thread_z * 2;
 
     // The last element should never try swapping with an element ahead of it.
 
-/* 
     if (thread_z < 3) {
         // TODO: I don't think 8 is guaranteed to be enough iterations.
-        for (uint i = 0; i < 8; i++) {
+        for (uint32_t i = 0; i < 8; i++) {
             // TODO: There exist atomic-compare-exchange instructions that might
             // be more efficient than this algorithm.
-            uint odd_sort = (i + 1) % 2;
+            uint32_t odd_sort = (i + 1) % 2;
 
             // Odd sort:
-            Pixel temp_pixel =
-                  pixel_buffer_cells[current_cell].pixel_buckets[thread_bucket_index].pixels[thread_pixel_index + odd_sort];
+            Pixel temp_pixel = pixel_buffer_cells[current_cell]
+            .pixel_buckets[thread_bucket_index]
+            .pixels[thread_pixel_index + odd_sort];
                     
             if (pixel_buffer_cells[current_cell]
-                            .pixel_buckets[thread_bucket_index]
-                            .pixels[thread_pixel_index + odd_sort + 1]
-                            .depth < temp_pixel.depth) {
+            .pixel_buckets[thread_bucket_index]
+            .pixels[thread_pixel_index + odd_sort + 1]
+            .depth < temp_pixel.depth) {
                 pixel_buffer_cells[current_cell]
-                    .pixel_buckets[thread_bucket_index]
-                    .pixels[thread_pixel_index + odd_sort] =
+                .pixel_buckets[thread_bucket_index]
+                .pixels[thread_pixel_index + odd_sort] =
                         pixel_buffer_cells[current_cell]
-                    .pixel_buckets[thread_bucket_index]
-                    .pixels[thread_pixel_index + odd_sort + 1];
+                        .pixel_buckets[thread_bucket_index]
+                        .pixels[thread_pixel_index + odd_sort + 1];
                     
                 pixel_buffer_cells[current_cell]
-                    .pixel_buckets[thread_bucket_index]
-                    .pixels[thread_pixel_index + odd_sort + 1] =
-                        temp_pixel;
+                .pixel_buckets[thread_bucket_index]
+                .pixels[thread_pixel_index + odd_sort + 1] = temp_pixel;
             }
 
-            // Waiting is only necessary when sorting between groups.
+            // Waiting is only necessary when sorting across groups.
             if (odd_sort == 1) {
                GroupMemoryBarrierWithGroupSync();
             }
         }
     }
-*/ 
+ 
     if (thread_z == 0) {
         // The first element is the lowest depth after sorting.
         Pixel nearest_pixel = pixel_buffer_cells[current_cell]
