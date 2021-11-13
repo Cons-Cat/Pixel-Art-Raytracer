@@ -39,9 +39,37 @@ inline auto get_run_path() -> std::string {
 constexpr uint32_t view_width = 480;
 constexpr uint32_t view_height = 300;
 
+struct Entity {
+    uint32_t tex_x, tex_y;
+    uint32_t x, y, z;
+};
+
 struct Pixel {
     uint32_t palette_index;
     uint32_t depth;
+};
+
+struct SpriteAtlas {
+    static constexpr uint32_t atlas_width = 20u;
+    static constexpr uint32_t atlas_height = 40u;
+    Pixel pixels[atlas_height][atlas_width];
+
+    void make_cube(int x, int y) {
+        uint32_t sprite_width = 20u;
+        uint32_t sprite_height = 40u;
+        for (int32_t j = 0; j < sprite_height; j++) {
+            for (int32_t i = 0; i < sprite_width; i++) {
+                pixels[y + j][x + i].palette_index = 3;  // Blank color.
+                if (j < sprite_height / 2) {
+                    // Top face.
+                    pixels[y + j][x + i].palette_index = 1;
+                } else {
+                    // Front face.
+                    pixels[y + j][x + i].palette_index = 2;
+                }
+            }
+        }
+    }
 };
 
 struct PixelArray {
@@ -64,30 +92,51 @@ struct Cell {
 // Pixel buffer data structure.
 struct GpuPixelBuffer {
     Cell cells[75][120];
-};
 
-struct Entity {
-    uint32_t tex_x, tex_y;
-    uint32_t x, y, z;
-};
+    void clear() {
+        for (uint32_t cell_y = 0; cell_y < 75; cell_y++) {
+            for (uint32_t cell_x = 0; cell_x < 120; cell_x++) {
+                for (uint32_t j = 0; j < 4; j++) {
+                    for (uint32_t i = 0; i < 4; i++) {
+                        this->cells[cell_y][cell_x].pixel_buckets[j][i].size =
+                            0;
+                        for (uint32_t k = 0; k < 8; k++) {
+                            Pixel& current_pixel = this->cells[cell_y][cell_x]
+                                                       .pixel_buckets[j][i]
+                                                       .pixels[k];
+                            current_pixel.palette_index = 3;  // Blank color.
+                            current_pixel.depth = 255;        // Maximum depth.
+                        }
+                    }
+                }
+            }
+        }
+    }
 
-struct SpriteAtlas {
-    static constexpr uint32_t atlas_width = 20u;
-    static constexpr uint32_t atlas_height = 40u;
-    Pixel pixels[atlas_height][atlas_width];
+    // TODO: Should there be an array abstraction?
+    void render_entities(Entity* p_entities, uint32_t entity_count,
+                         SpriteAtlas* p_sprite_atlas) {
+        for (uint32_t cube = 0; cube < entity_count; cube++) {
+            Entity& current_entity = p_entities[cube];
 
-    void make_cube(int x, int y) {
-        uint32_t sprite_width = 20u;
-        uint32_t sprite_height = 40u;
-        for (int32_t j = 0; j < sprite_height; j++) {
-            for (int32_t i = 0; i < sprite_width; i++) {
-                pixels[y + j][x + i].palette_index = 3;  // Blank color.
-                if (j < sprite_height / 2) {
-                    // Top face.
-                    pixels[y + j][x + i].palette_index = 1;
-                } else {
-                    // Front face.
-                    pixels[y + j][x + i].palette_index = 2;
+            for (uint32_t j = 0; j < 40; j++) {
+                for (uint32_t i = 0; i < 20; i++) {
+                    // TODO: Extract current pixel lookup to function.
+                    uint32_t world_x = current_entity.x + i;
+                    uint32_t world_y = current_entity.y + j;
+                    uint32_t cell_x = world_x / 4;
+                    uint32_t cell_y = world_y / 4;
+                    Cell& current_cell = this->cells[cell_y][cell_x];
+                    PixelArray& current_pixel_bucket =
+                        current_cell.pixel_buckets[world_y - cell_y * 4]
+                                                  [world_x - cell_x * 4];
+                    Pixel& current_pixel =
+                        p_sprite_atlas->pixels[current_entity.tex_y + j]
+                                              [current_entity.tex_x + i];
+                    current_pixel_bucket.push(Pixel{
+                        .palette_index = current_pixel.palette_index,
+                        .depth = current_pixel.depth - current_entity.y,
+                    });
                 }
             }
         }
@@ -124,51 +173,10 @@ auto main() -> int {
 
     // Clear buffer.
     GpuPixelBuffer* p_pixel_buffer_data = new (std::nothrow) GpuPixelBuffer();
-    for (uint32_t cell_y = 0; cell_y < 75; cell_y++) {
-        for (uint32_t cell_x = 0; cell_x < 120; cell_x++) {
-            for (uint32_t j = 0; j < 4; j++) {
-                for (uint32_t i = 0; i < 4; i++) {
-                    p_pixel_buffer_data->cells[cell_y][cell_x]
-                        .pixel_buckets[j][i]
-                        .size = 0;
-                    for (uint32_t k = 0; k < 8; k++) {
-                        Pixel& current_pixel =
-                            p_pixel_buffer_data->cells[cell_y][cell_x]
-                                .pixel_buckets[j][i]
-                                .pixels[k];
-                        current_pixel.palette_index = 3;  // Blank color.
-                        current_pixel.depth = 255;        // Maximum depth.
-                    }
-                }
-            }
-        }
-    }
+    p_pixel_buffer_data->clear();
 
     // Push sprites to buffer.
-    for (uint32_t cube = 0; cube < 1; cube++) {
-        Entity& current_entity = cubes[cube];
-
-        for (uint32_t j = 0; j < 40; j++) {
-            for (uint32_t i = 0; i < 20; i++) {
-                // TODO: Extract current pixel lookup to function.
-                uint32_t world_x = current_entity.x + i;
-                uint32_t world_y = current_entity.y + j;
-                uint32_t cell_x = world_x / 4;
-                uint32_t cell_y = world_y / 4;
-                Cell& current_cell = p_pixel_buffer_data->cells[cell_y][cell_x];
-                PixelArray& current_pixel_bucket =
-                    current_cell.pixel_buckets[world_y - cell_y * 4]
-                                              [world_x - cell_x * 4];
-                Pixel& current_pixel =
-                    p_sprite_atlas->pixels[current_entity.tex_y + j]
-                                          [current_entity.tex_x + i];
-                current_pixel_bucket.push(Pixel{
-                    .palette_index = current_pixel.palette_index,
-                    .depth = current_pixel.depth - current_entity.y,
-                });
-            }
-        }
-    }
+    p_pixel_buffer_data->render_entities(cubes, 8, p_sprite_atlas);
 
     lava::frame_config config;
     config.param.extensions.insert(config.param.extensions.end(),
