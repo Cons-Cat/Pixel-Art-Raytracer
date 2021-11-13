@@ -8,6 +8,13 @@
 #include <iostream>
 #include <string>
 
+// TODO: Automate this in CMake.
+#if Release == 1
+#define SHADERS_PATH "./res/"
+#else
+#define SHADERS_PATH "../../res/"
+#endif
+
 #ifdef WIN32
 #include <windows.h>
 inline auto get_run_path() -> std::string {
@@ -336,17 +343,17 @@ auto main() -> int {
         compute_pipeline_layout->create(app.device);
         compute_pipeline->set_layout(compute_pipeline_layout);
         compute_pipeline->set_shader_stage(
-            lava::file_data(get_run_path() + "../../res/compute.spv"),
+            lava::file_data(get_run_path() + SHADERS_PATH + "compute.spv"),
             VK_SHADER_STAGE_COMPUTE_BIT);
         compute_pipeline->create();
 
         // Make raster pipeline.
         raster_pipeline = lava::make_graphics_pipeline(app.device);
         raster_pipeline->add_shader(
-            lava::file_data(get_run_path() + "../../res/vertex.spv"),
+            lava::file_data(get_run_path() + SHADERS_PATH + "vertex.spv"),
             VK_SHADER_STAGE_VERTEX_BIT);
         raster_pipeline->add_shader(
-            lava::file_data(get_run_path() + "../../res/fragment.spv"),
+            lava::file_data(get_run_path() + SHADERS_PATH + "fragment.spv"),
             VK_SHADER_STAGE_FRAGMENT_BIT);
         raster_pipeline->add_color_blend_attachment();
         raster_pipeline->set_rasterization_cull_mode(VK_CULL_MODE_FRONT_BIT);
