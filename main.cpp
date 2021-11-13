@@ -8,6 +8,8 @@
 #include <iostream>
 #include <string>
 
+#include "vulkan/vulkan_core.h"
+
 // TODO: Automate this in CMake.
 #if Release == 1
 #define SHADERS_PATH "./res/"
@@ -176,7 +178,7 @@ auto main() -> int {
     p_pixel_buffer_data->clear();
 
     // Push sprites to buffer.
-    p_pixel_buffer_data->render_entities(cubes, 8, p_sprite_atlas);
+    // p_pixel_buffer_data->render_entities(cubes, 8, p_sprite_atlas);
 
     lava::frame_config config;
     config.param.extensions.insert(config.param.extensions.end(),
@@ -240,8 +242,28 @@ auto main() -> int {
     // This does not have the sampled bit.
     storage_image.set_usage(VK_IMAGE_USAGE_STORAGE_BIT);
 
+    // Staging buffer is host-writable.
     lava::buffer::ptr pixel_buffer_staging;
+    // Device buffer is device-visible.
     lava::buffer::ptr pixel_buffer_device;
+
+    auto fn_cmd_transfer_pixel_buffer_memory = [&](VkCommandBuffer p_cmd_buf) {
+        VkBufferCopy copy = {
+            .srcOffset = 0,
+            .dstOffset = 0,
+            .size = sizeof(GpuPixelBuffer),
+        };
+        vkCmdCopyBuffer(p_cmd_buf, pixel_buffer_staging->get(),
+                        pixel_buffer_device->get(), 1, &copy);
+    };
+
+    auto fn_cmd_record_storage_image_transition =
+        [&](VkCommandBuffer p_cmd_buf) {
+            lava::set_image_layout(app.device, p_cmd_buf, storage_image.get(),
+                                   VK_IMAGE_ASPECT_COLOR_BIT,
+                                   VK_IMAGE_LAYOUT_UNDEFINED,
+                                   VK_IMAGE_LAYOUT_GENERAL);
+        };
 
     app.on_create = [&]() {
         descriptor_pool = lava::make_descriptor_pool();
@@ -268,7 +290,7 @@ auto main() -> int {
         pixel_buffer_staging = lava::make_buffer();
         pixel_buffer_staging->create(
             app.device, p_pixel_buffer_data, sizeof(GpuPixelBuffer),
-            VK_BUFFER_USAGE_TRANSFER_SRC_BIT, true, VMA_MEMORY_USAGE_CPU_ONLY);
+            VK_BUFFER_USAGE_TRANSFER_SRC_BIT, false, VMA_MEMORY_USAGE_CPU_ONLY);
 
         pixel_buffer_device = lava::make_buffer();
         pixel_buffer_device->create(app.device, p_pixel_buffer_data,
@@ -277,29 +299,14 @@ auto main() -> int {
                                         VK_BUFFER_USAGE_STORAGE_BUFFER_BIT,
                                     true, VMA_MEMORY_USAGE_GPU_ONLY);
 
-        auto fn_transfer_pixel_buffer_memory = [&](VkCommandBuffer p_cmd_buf) {
-            // TODO: Is there a simpler way with Liblava?
-            VkBufferCopy copy;
-            copy.dstOffset = 0;
-            copy.srcOffset = 0;
-            copy.size = sizeof(GpuPixelBuffer);
-            vkCmdCopyBuffer(p_cmd_buf, pixel_buffer_staging->get(),
-                            pixel_buffer_device->get(), 1, &copy);
+        auto fn_one_time_cmd = [&](VkCommandBuffer p_cmd_buf) {
+            fn_cmd_transfer_pixel_buffer_memory(p_cmd_buf);
+            fn_cmd_record_storage_image_transition(p_cmd_buf);
         };
-        lava::one_time_command_buffer(app.device, p_cmd_pool,
-                                      app.device->get_graphics_queue(),
-                                      fn_transfer_pixel_buffer_memory);
 
-        auto fn_record_storage_image_transition =
-            [&](VkCommandBuffer p_cmd_buf) {
-                lava::set_image_layout(
-                    app.device, p_cmd_buf, storage_image.get(),
-                    VK_IMAGE_ASPECT_COLOR_BIT, VK_IMAGE_LAYOUT_UNDEFINED,
-                    VK_IMAGE_LAYOUT_GENERAL);
-            };
         lava::one_time_command_buffer(app.device, p_cmd_pool,
                                       app.device->get_graphics_queue(),
-                                      fn_record_storage_image_transition);
+                                      fn_one_time_cmd);
 
         VkImageViewCreateInfo view_info{
             .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
@@ -393,6 +400,7 @@ auto main() -> int {
     };
 
     app.on_process = [&](VkCommandBuffer p_cmd_buf, lava::index) {
+        // A command buffer is automatically recording.
         compute_pipeline->bind(p_cmd_buf);
         compute_pipeline_layout->bind_descriptor_set(
             p_cmd_buf, p_shared_descriptor_set_image, 0, {},
@@ -417,13 +425,24 @@ auto main() -> int {
                              nullptr, 0, nullptr, 1, &image_memory_barrier);
     };
 
-    app.on_update = [&](lava::delta dt) {
-        if (!compute_pipeline->activated()) {
-            return false;
-        }
-        if (!raster_pipeline->activated()) {
-            return false;
-        }
+    app.on_update = [&](lava::delta) {
+        cubes[1].x += 1;
+        p_pixel_buffer_data->clear();
+        p_pixel_buffer_data->render_entities(cubes, 8, p_sprite_atlas);
+        void* p_data;
+        vkMapMemory(app.device->get(),
+                    pixel_buffer_staging->get_device_memory(), 0,
+                    pixel_buffer_staging->get_size(), 0, &p_data);
+        memcpy(p_data, p_pixel_buffer_data, sizeof(*p_pixel_buffer_data));
+        vkUnmapMemory(app.device->get(),
+                      pixel_buffer_staging->get_device_memory());
+        auto fn_one_time_cmd = [&](VkCommandBuffer p_cmd_buf) {
+            fn_cmd_transfer_pixel_buffer_memory(p_cmd_buf);
+            fn_cmd_record_storage_image_transition(p_cmd_buf);
+        };
+        lava::one_time_command_buffer(app.device, p_cmd_pool,
+                                      app.device->get_graphics_queue(),
+                                      fn_one_time_cmd);
         return true;
     };
 
