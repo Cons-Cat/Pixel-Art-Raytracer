@@ -65,9 +65,11 @@ struct SpriteAtlas {
                 if (j < sprite_height / 2) {
                     // Top face.
                     pixels[y + j][x + i].palette_index = 1;
+                    pixels[y + j][x + i].depth = sprite_height / 2 - j;
                 } else {
                     // Front face.
                     pixels[y + j][x + i].palette_index = 2;
+                    pixels[y + j][x + i].depth = 0;
                 }
             }
         }
@@ -137,7 +139,8 @@ struct GpuPixelBuffer {
                                               [current_entity.tex_x + i];
                     current_pixel_bucket.push(Pixel{
                         .palette_index = current_pixel.palette_index,
-                        .depth = current_pixel.depth - current_entity.y,
+                        .depth = view_height - current_entity.y +
+                                 current_pixel.depth,
                     });
                 }
             }
