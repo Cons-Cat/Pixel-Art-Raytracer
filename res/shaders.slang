@@ -90,6 +90,12 @@ void compute_main(uint3 group_id : SV_GroupID,
         } else {
             uav[dispatch_thread_id.xy] = float4(0, 0, 0, 1);
         }
+
+        // Depth test.
+        // if (nearest_pixel.palette_index != 3) {
+        //     float depth_col = (float)nearest_pixel.depth / 300.0f;
+        //     uav[dispatch_thread_id.xy] = float4(depth_col, depth_col, depth_col, 1);
+        // }
     }
 }
 

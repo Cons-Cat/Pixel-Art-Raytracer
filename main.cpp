@@ -42,7 +42,7 @@ constexpr uint32_t view_width = 480;
 constexpr uint32_t view_height = 300;
 
 struct Entity {
-    uint32_t tex_x, tex_y;
+    uint32_t tex_x, tex_y, tex_w, tex_h;
     uint32_t x, y, z;
 };
 
@@ -123,8 +123,8 @@ struct GpuPixelBuffer {
         for (uint32_t cube = 0; cube < entity_count; cube++) {
             Entity& current_entity = p_entities[cube];
 
-            for (uint32_t j = 0; j < 40; j++) {
-                for (uint32_t i = 0; i < 20; i++) {
+            for (uint32_t j = 0; j < current_entity.tex_h; j++) {
+                for (uint32_t i = 0; i < current_entity.tex_w; i++) {
                     // TODO: Extract current pixel lookup to function.
                     uint32_t world_x = current_entity.x + i;
                     uint32_t world_y = current_entity.y + j;
@@ -164,24 +164,22 @@ auto main() -> int {
     }
     p_sprite_atlas->make_cube(0, 0);
 
+    GpuPixelBuffer* p_pixel_buffer_data = new (std::nothrow) GpuPixelBuffer();
+    p_pixel_buffer_data->clear();
+
     // Initialize cubes.
     Entity cubes[8];
     for (int i = 0; i < 8; i++) {
-        auto rand_x = rand() % (480u - 20u);
-        auto rand_y = rand() % (300u - 40u);
+        uint32_t rand_x = static_cast<uint32_t>(rand()) % (480u - 20u);
+        uint32_t rand_y = static_cast<uint32_t>(rand()) % (300u - 40u);
         cubes[i].x = rand_x;
         cubes[i].y = rand_y;
         cubes[i].z = 100u;
         cubes[i].tex_x = 0u;
         cubes[i].tex_y = 0u;
+        cubes[i].tex_w = 20u;
+        cubes[i].tex_h = 40u;
     }
-
-    // Clear buffer.
-    GpuPixelBuffer* p_pixel_buffer_data = new (std::nothrow) GpuPixelBuffer();
-    p_pixel_buffer_data->clear();
-
-    // Push sprites to buffer.
-    // p_pixel_buffer_data->render_entities(cubes, 8, p_sprite_atlas);
 
     lava::frame_config config;
     config.param.extensions.insert(config.param.extensions.end(),
