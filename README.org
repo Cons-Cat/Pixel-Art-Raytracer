@@ -2,7 +2,7 @@
 #+AUTHOR: Conscat
 
 * Week 4
-** TODO Depth sprite
+** DONE Depth sprite
 ** TODO Color palette
 ** TODO Correct 3D depth sorting
 ** TODO Z movement

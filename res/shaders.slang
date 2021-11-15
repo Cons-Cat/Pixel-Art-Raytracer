@@ -1,3 +1,5 @@
+import palette;
+
 // (Descriptor Binding, Descriptor Set)
 [vk::binding(0, 0)]
 RWTexture2D<float4> uav;
@@ -81,17 +83,11 @@ void compute_main(uint3 group_id : SV_GroupID,
             .pixel_buckets[thread_bucket_index]
             .pixels[0];
 
-        if (nearest_pixel.palette_index == 0) {
-            uav[dispatch_thread_id.xy] = float4(0.9, 1, 0, 1);
-        } else if (nearest_pixel.palette_index == 1) {
-            uav[dispatch_thread_id.xy] = float4(0.65f, 0, 0, 1);
-        } else if (nearest_pixel.palette_index == 2) {
-            uav[dispatch_thread_id.xy] = float4(0.3f, 0, 1, 1);
-        } else {
-            uav[dispatch_thread_id.xy] = float4(0, 0, 0, 1);
-        }
+        Lab color = color_palette[nearest_pixel.palette_index];
+        float3 rgb = oklab_to_linear_srgb(color);
+        uav[dispatch_thread_id.xy] = float4(rgb, 1.0f);
 
-        // Depth test.
+        // Depth visualization.
         // if (nearest_pixel.palette_index != 3) {
         //     float depth_col = (float)nearest_pixel.depth / 300.0f;
         //     uav[dispatch_thread_id.xy] = float4(depth_col, depth_col, depth_col, 1);

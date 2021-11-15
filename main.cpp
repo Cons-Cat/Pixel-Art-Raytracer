@@ -38,8 +38,8 @@ inline auto get_run_path() -> std::string {
 }
 #endif
 
-constexpr uint32_t view_width = 480;
-constexpr uint32_t view_height = 300;
+constexpr uint32_t view_width = 480u;
+constexpr uint32_t view_height = 300u;
 
 struct Entity {
     uint32_t tex_x, tex_y, tex_w, tex_h;
@@ -61,14 +61,14 @@ struct SpriteAtlas {
         uint32_t sprite_height = 40u;
         for (int32_t j = 0; j < sprite_height; j++) {
             for (int32_t i = 0; i < sprite_width; i++) {
-                pixels[y + j][x + i].palette_index = 3;  // Blank color.
+                pixels[y + j][x + i].palette_index = 0;  // Blank color.
                 if (j < sprite_height / 2) {
                     // Top face.
-                    pixels[y + j][x + i].palette_index = 1;
+                    pixels[y + j][x + i].palette_index = 31;
                     pixels[y + j][x + i].depth = sprite_height / 2 - j;
                 } else {
                     // Front face.
-                    pixels[y + j][x + i].palette_index = 2;
+                    pixels[y + j][x + i].palette_index = 30;
                     pixels[y + j][x + i].depth = 0;
                 }
             }
@@ -108,7 +108,7 @@ struct GpuPixelBuffer {
                             Pixel& current_pixel = this->cells[cell_y][cell_x]
                                                        .pixel_buckets[j][i]
                                                        .pixels[k];
-                            current_pixel.palette_index = 3;  // Blank color.
+                            current_pixel.palette_index = 0;  // Blank color.
                             current_pixel.depth = 255;        // Maximum depth.
                         }
                     }
@@ -157,7 +157,7 @@ auto main() -> int {
     for (int i = 0; i < p_sprite_atlas->atlas_width; i++) {
         for (int j = 0; j < p_sprite_atlas->atlas_height; j++) {
             p_sprite_atlas->pixels[j][i] = Pixel{
-                .palette_index = 3,  // Blank color.
+                .palette_index = 0,  // Blank color.
                 .depth = 255,        // Maximum depth.
             };
         }
