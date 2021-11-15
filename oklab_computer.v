@@ -1,0 +1,79 @@
+import math
+
+#include <math.h>
+
+fn main() {
+	// https://pixeljoint.com/forum/forum_posts.asp?TID=16247
+	colors := [
+		[f64(0x00), 0x00, 0x00],
+		[f64(0x22), 0x20, 0x23],
+		[f64(0x45), 0x28, 0x3c],
+		[f64(0x66), 0x39, 0x31],
+		[f64(0x8f), 0x56, 0x3b],
+		[f64(0xdf), 0x71, 0x26],
+		[f64(0xd9), 0xa0, 0x66],
+		[f64(0xee), 0xc3, 0x9a],
+		[f64(0xfb), 0xf2, 0x36],
+		[f64(0x99), 0xe5, 0x50],
+		[f64(0x6a), 0xbe, 0x30],
+		[f64(0x37), 0x94, 0x6e],
+		[f64(0x4b), 0x69, 0x2f],
+		[f64(0x52), 0x4b, 0x24],
+		[f64(0x32), 0x3c, 0x39],
+		[f64(0x3f), 0x3f, 0x74],
+		[f64(0x30), 0x60, 0x82],
+		[f64(0x5b), 0x6e, 0xe1],
+		[f64(0x63), 0x9b, 0xff],
+		[f64(0x5f), 0xcd, 0xe4],
+		[f64(0xcb), 0xdb, 0xfc],
+		[f64(0xff), 0xff, 0xff],
+		[f64(0x9b), 0xad, 0xb7],
+		[f64(0x84), 0x7e, 0x87],
+		[f64(0x69), 0x6a, 0x6a],
+		[f64(0x59), 0x56, 0x52],
+		[f64(0x76), 0x42, 0x8a],
+		[f64(0xac), 0x32, 0x32],
+		[f64(0xd9), 0x57, 0x63],
+		[f64(0xd7), 0x7b, 0xba],
+		[f64(0x8f), 0x97, 0x4a],
+		[f64(0x8a), 0x6f, 0x30],
+	]
+	range := 1
+	for c in colors {
+		println('// $c')
+		new_c := linear_srgb_to_oklab(c)
+		println('\{ ${new_c.l/ range}, ${new_c.a / range}, ${new_c.b / range} \},')
+	}
+}
+
+struct Lab {
+	l f64
+	a f64
+	b f64
+}
+
+struct RGB {
+	r f64
+	g f64
+	b f64
+}
+
+fn C.cbrt(f64) f64
+
+fn linear_srgb_to_oklab(c []f64) Lab {
+	range := 255
+	l := f64(0.4122214708 * f64(c[0]) / range + 0.5363325363 * f64(c[1]) / range +
+		0.0514459929 * f64(c[2]) / range)
+	m := f64(0.2119034982 * f64(c[0]) / range + 0.6806995451 * f64(c[1]) / range +
+		0.1073969566 * f64(c[2]) / range)
+	s := f64(0.0883024619 * f64(c[0]) / range + 0.2817188376 * f64(c[1]) / range +
+		0.6299787005 * f64(c[2]) / range)
+
+	l_ := C.cbrt(l)
+	m_ := C.cbrt(m)
+	s_ := C.cbrt(s)
+
+	return Lab{0.2104542553 * l_ + 0.7936177850 * m_ - 0.0040720468 * s_,
+		1.9779984951 * l_ - 2.4285922050 * m_ + 0.4505937099 * s_, 0.0259040371 * l_ +
+		0.7827717662 * m_ - 0.8086757660 * s_}
+}

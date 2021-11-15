@@ -203,6 +203,7 @@ auto main() -> int {
         .pNext = &features_1,
         .features =
             {
+                .shaderFloat64 = VK_TRUE,
                 .shaderInt64 = VK_TRUE,
             },
     };
