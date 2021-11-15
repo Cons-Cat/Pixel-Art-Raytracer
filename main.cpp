@@ -43,51 +43,63 @@ inline auto get_run_path() -> std::string {
 uint32_t view_width = 480u;
 uint32_t view_height = 300u;
 
-struct Entity {
-    int32_t tex_x, tex_y, tex_w, tex_h;
-    int32_t x, y, z;
-};
-
 struct Pixel {
     uint32_t palette_index;
     int32_t depth;
 };
+
 constexpr int32_t max_depth =
     std::numeric_limits<decltype(Pixel::depth)>::max();
 
+struct Sprite {
+    // All sprites are 20x20.
+    int32_t atlas_index;
+    // Sprites have an [x,y,z] offset from the origin of an entity.
+    int32_t offset_x, offset_y, offset_z;
+};
+
 struct SpriteAtlas {
-    static constexpr int32_t atlas_width = 20;
-    static constexpr int32_t atlas_height = 40;
-    Pixel pixels[atlas_height][atlas_width];
+    static constexpr uint32_t sprites_count = 2;
+    static constexpr int32_t sprite_width = 20;
+    static constexpr int32_t sprite_height = 20;
+    Pixel pixels[sprites_count * sprite_width * sprite_height];
 
-    // Currently, all sprites are represented as 2D arrays of Pixel.
-    // Their origin is bottom-left.
-
-    // TODO: Improve cache friendliness by storing sprites linearly instead of
-    // in two-dimensions.
-    void make_cube(int32_t x, int32_t y) {
-        int32_t sprite_width = 20;
-        int32_t sprite_height = 40;
-        // This order of for loops should be more cache friendly.
+    // All sprites are drawn from their top-left, incrementing horizontally
+    // across, and then vertically across.
+    void make_cube_top(int32_t atlas_index) {
         for (int32_t j = 0; j < sprite_height; j++) {
             for (int32_t i = 0; i < sprite_width; i++) {
-                pixels[y + j][x + i].palette_index = 0u;  // Blank color.
-                if (j < sprite_height / 2) {
-                    // Top face.
-                    pixels[y + j][x + i].palette_index = 31u;
-                    // Depth increases from 0 to 20 backwards along the top
-                    // face.
-                    pixels[y + j][x + i].depth = sprite_height / 2 - j;
-                } else {
-                    // Front face.
-                    pixels[y + j][x + i].palette_index = 30u;
-                    // Depth increases from 0 to 20 downward along the front
-                    // face.
-                    pixels[y + j][x + i].depth = j - sprite_height / 2;
-                }
+                int32_t const pixel_index =
+                    (atlas_index * sprite_width * sprite_height) +
+                    j * sprite_width + i;
+                pixels[pixel_index].palette_index = 31u;
+                // Depth increases from 0 to 20 backwards along the top
+                // face.
+                pixels[pixel_index].depth = 0;
             }
         }
     }
+
+    void make_cube_front(int32_t atlas_index) {
+        for (int32_t j = 0; j < sprite_height; j++) {
+            for (int32_t i = 0; i < sprite_width; i++) {
+                int32_t const pixel_index =
+                    (atlas_index * sprite_width * sprite_height) +
+                    j * sprite_width + i;
+                pixels[pixel_index].palette_index = 30u;
+                // Depth increases from 0 to 20 downward along the front
+                // face.
+                pixels[pixel_index].depth = -j;
+            }
+        }
+    }
+};
+
+struct Entity {
+    // Origin point of this entity.
+    int32_t origin_x, origin_y, origin_z;
+    int32_t sprites_count = 0;
+    Sprite* sprites;
 };
 
 struct PixelBucket {
@@ -95,10 +107,13 @@ struct PixelBucket {
     int32_t size = 0;
     Pixel pixels[8];
 
-    // TODO: R-value reference?
+    // TODO: r-value reference?
     void push(Pixel pixel) {
-        this->pixels[size] = pixel;
-        this->size++;
+        // TODO: Make this a ring buffer instead of saturated buffer.
+        if (this->size < 8) {
+            this->pixels[this->size] = pixel;
+            this->size++;
+        }
     }
 };
 
@@ -123,8 +138,8 @@ struct GpuPixelBuffer {
                             Pixel& current_pixel = this->cells[cell_y][cell_x]
                                                        .pixel_buckets[j][i]
                                                        .pixels[k];
-                            current_pixel.palette_index = 0;  // Blank color.
-                            current_pixel.depth = max_depth;  // Maximum depth.
+                            current_pixel.palette_index = 0;
+                            current_pixel.depth = 0;
                         }
                     }
                 }
@@ -132,63 +147,38 @@ struct GpuPixelBuffer {
         }
     }
 
-    // TODO: Remove this function.
-    void render_entities(Entity* p_entities, int32_t entity_count,
-                         SpriteAtlas* p_sprite_atlas) {
-        for (int32_t cube = 0; cube < entity_count; cube++) {
-            Entity& current_entity = p_entities[cube];
-
-            for (int32_t j = 0; j < current_entity.tex_h; j++) {
-                for (int32_t i = 0; i < current_entity.tex_w; i++) {
-                    // TODO: Extract current pixel lookup to function.
-                    int32_t view_x = current_entity.x + i;
-                    int32_t view_y = current_entity.y + j - current_entity.z;
-                    int32_t cell_x = view_x / 4;
-                    int32_t cell_y = view_y / 4;
-                    Cell& current_cell = this->cells[cell_y][cell_x];
-                    PixelBucket& current_pixel_bucket =
-                        current_cell.pixel_buckets[view_y - cell_y * 4]
-                                                  [view_x - cell_x * 4];
-                    Pixel& current_pixel =
-                        p_sprite_atlas->pixels[current_entity.tex_y + j]
-                                              [current_entity.tex_x + i];
-                    current_pixel_bucket.push(Pixel{
-                        .palette_index = current_pixel.palette_index,
-                        .depth = max_depth
-                                 // Y depth offset (along ground).
-                                 - current_entity.y +
-                                 current_pixel.depth
-                                 // Z depth offset (skyward).
-                                 - current_entity.z,
-                    });
+    void draw_sprite(SpriteAtlas const* p_sprite_atlas, int32_t world_x,
+                     int32_t world_y, int32_t world_z, int32_t atlas_index) {
+        for (int32_t j = 0; j < p_sprite_atlas->sprite_height; j++) {
+            for (int32_t i = 0; i < p_sprite_atlas->sprite_width; i++) {
+                int32_t view_x = world_x + i;
+                int32_t view_y = world_y + j - world_z;
+                if (view_x < 0 || view_x >= view_width || view_y < 0 ||
+                    view_y >= view_height) {
+                    // Do not push sprites out of bounds.
+                    continue;
                 }
-            }
-        }
-    }
-
-    void draw_sprite(SpriteAtlas* p_sprite_atlas, int32_t x, int32_t y,
-                     int32_t z, int32_t tex_x, int32_t tex_y, int32_t tex_w,
-                     int32_t tex_h) {
-        for (int32_t i = 0; i < tex_w; i++) {
-            for (int32_t j = 0; j < tex_h; j++) {
-                int32_t view_x = x + i;
-                int32_t view_y = y + j - z;
                 int32_t cell_x = view_x / 4;
                 int32_t cell_y = view_y / 4;
                 Cell& current_cell = this->cells[cell_y][cell_x];
+                int32_t const current_pixel_index =
+                    (atlas_index * p_sprite_atlas->sprite_width *
+                     p_sprite_atlas->sprite_height) +
+                    j * p_sprite_atlas->sprite_width + i;
+
+                Pixel const& current_pixel =
+                    p_sprite_atlas->pixels[current_pixel_index];
+
                 PixelBucket& current_pixel_bucket =
                     current_cell.pixel_buckets[view_y - cell_y * 4]
                                               [view_x - cell_x * 4];
-                Pixel& current_pixel =
-                    p_sprite_atlas->pixels[tex_y + j][tex_x + i];
                 current_pixel_bucket.push(Pixel{
                     .palette_index = current_pixel.palette_index,
-                    .depth = max_depth
+                    .depth = current_pixel.depth
                              // Y depth offset (along ground).
-                             - y +
-                             current_pixel.depth
+                             - world_y
                              // Z depth offset (skyward).
-                             - z,
+                             - world_z,
                 });
             }
         }
@@ -201,15 +191,17 @@ auto main() -> int {
 
     SpriteAtlas* p_sprite_atlas = new (std::nothrow) SpriteAtlas();
 
-    for (int32_t i = 0; i < p_sprite_atlas->atlas_width; i++) {
-        for (int32_t j = 0; j < p_sprite_atlas->atlas_height; j++) {
-            p_sprite_atlas->pixels[j][i] = Pixel{
-                .palette_index = 0,  // Blank color.
-                .depth = max_depth,
-            };
+    for (int32_t j = 0; j < p_sprite_atlas->sprite_height; j++) {
+        for (int32_t i = 0; i < p_sprite_atlas->sprite_width; i++) {
+            p_sprite_atlas->pixels[i + j * p_sprite_atlas->sprite_width] =
+                Pixel{
+                    .palette_index = 0,
+                    .depth = 0,
+                };
         }
     }
-    p_sprite_atlas->make_cube(0, 0);
+    p_sprite_atlas->make_cube_front(0);
+    p_sprite_atlas->make_cube_top(1);
 
     GpuPixelBuffer* p_pixel_buffer_data = new (std::nothrow) GpuPixelBuffer();
     p_pixel_buffer_data->clear();
@@ -217,15 +209,30 @@ auto main() -> int {
     // Initialize cubes.
     Entity cubes[8];
     for (int32_t i = 0; i < 8; i++) {
-        int32_t rand_x = static_cast<int32_t>(rand()) % (480 - 20);
-        int32_t rand_y = static_cast<int32_t>(rand()) % (300 - 40);
-        cubes[i].x = rand_x;
-        cubes[i].y = rand_y;
-        cubes[i].z = 0;
-        cubes[i].tex_x = 0;
-        cubes[i].tex_y = 0;
-        cubes[i].tex_w = 20;
-        cubes[i].tex_h = 40;
+        int32_t rand_x = rand() % (480 - 20);
+        int32_t rand_y = rand() % (300 - 40);
+        cubes[i].origin_x = rand_x;
+        cubes[i].origin_y = rand_y;
+        cubes[i].origin_z = 0;
+        cubes[i].sprites_count = 2;
+        cubes[i].sprites = new (std::nothrow) Sprite[cubes[i].sprites_count]{
+            // Cubes have an origin at their top edge, on their front-left
+            // corner.
+            Sprite{
+                // Top face of a cube.
+                .atlas_index = 0,
+                .offset_x = 0,
+                .offset_y = -20,
+                .offset_z = 0,
+            },
+            Sprite{
+                // Front face of a cube.
+                .atlas_index = 1,
+                .offset_x = 0,
+                .offset_y = 0,
+                .offset_z = 0,
+            },
+        };
     }
 
     lava::frame_config config;
@@ -272,7 +279,7 @@ auto main() -> int {
     // VkCmdDispatch takes unsigned integers.
     uint32_t const workgroup_width = view_width / 4u;
     uint32_t const workgroup_height = view_height / 4u;
-    uint32_t const workgroup_depth = 4;
+    uint32_t const workgroup_depth = 4u;
 
     lava::graphics_pipeline::ptr raster_pipeline;
     lava::pipeline_layout::ptr raster_pipeline_layout;
@@ -520,26 +527,37 @@ auto main() -> int {
     app.on_update = [&](lava::delta) {
         Entity& e = cubes[1];
         if (r) {
-            e.x += 1;
+            e.origin_x += 1;
         }
         if (l) {
-            e.x -= 1;
+            e.origin_x -= 1;
         }
         if (u) {
-            e.y -= 1;
+            e.origin_y -= 1;
         }
         if (d) {
-            e.y += 1;
+            e.origin_y += 1;
         }
         if (zu) {
-            e.z += 1;
+            e.origin_z += 1;
         }
         if (zd) {
-            e.z -= 1;
+            e.origin_z -= 1;
         }
 
         p_pixel_buffer_data->clear();
-        p_pixel_buffer_data->render_entities(cubes, 8, p_sprite_atlas);
+        for (int32_t i = 0; i < 8; i++) {
+            Entity const& current_entity = cubes[i];
+            for (int32_t j = 0; j < current_entity.sprites_count; j++) {
+                Sprite const& current_sprite = current_entity.sprites[j];
+                p_pixel_buffer_data->draw_sprite(
+                    p_sprite_atlas,
+                    current_entity.origin_x + current_sprite.offset_x,
+                    current_entity.origin_y + current_sprite.offset_y,
+                    current_entity.origin_z + current_sprite.offset_z, j);
+            }
+        }
+
         void* p_data;
         vkMapMemory(app.device->get(),
                     pixel_buffer_staging->get_device_memory(), 0,
