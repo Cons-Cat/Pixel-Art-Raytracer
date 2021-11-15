@@ -40,46 +40,59 @@ inline auto get_run_path() -> std::string {
 }
 #endif
 
-constexpr uint32_t view_width = 480u;
-constexpr uint32_t view_height = 300u;
+uint32_t view_width = 480u;
+uint32_t view_height = 300u;
 
 struct Entity {
-    uint32_t tex_x, tex_y, tex_w, tex_h;
-    uint32_t x, y, z;
+    int32_t tex_x, tex_y, tex_w, tex_h;
+    int32_t x, y, z;
 };
 
 struct Pixel {
     uint32_t palette_index;
-    uint32_t depth;
+    int32_t depth;
 };
+constexpr int32_t max_depth =
+    std::numeric_limits<decltype(Pixel::depth)>::max();
 
 struct SpriteAtlas {
-    static constexpr uint32_t atlas_width = 20u;
-    static constexpr uint32_t atlas_height = 40u;
+    static constexpr int32_t atlas_width = 20;
+    static constexpr int32_t atlas_height = 40;
     Pixel pixels[atlas_height][atlas_width];
 
-    void make_cube(int x, int y) {
-        uint32_t sprite_width = 20u;
-        uint32_t sprite_height = 40u;
+    // Currently, all sprites are represented as 2D arrays of Pixel.
+    // Their origin is bottom-left.
+
+    // TODO: Improve cache friendliness by storing sprites linearly instead of
+    // in two-dimensions.
+    void make_cube(int32_t x, int32_t y) {
+        int32_t sprite_width = 20;
+        int32_t sprite_height = 40;
+        // This order of for loops should be more cache friendly.
         for (int32_t j = 0; j < sprite_height; j++) {
             for (int32_t i = 0; i < sprite_width; i++) {
-                pixels[y + j][x + i].palette_index = 0;  // Blank color.
+                pixels[y + j][x + i].palette_index = 0u;  // Blank color.
                 if (j < sprite_height / 2) {
                     // Top face.
-                    pixels[y + j][x + i].palette_index = 31;
+                    pixels[y + j][x + i].palette_index = 31u;
+                    // Depth increases from 0 to 20 backwards along the top
+                    // face.
                     pixels[y + j][x + i].depth = sprite_height / 2 - j;
                 } else {
                     // Front face.
-                    pixels[y + j][x + i].palette_index = 30;
-                    pixels[y + j][x + i].depth = 0;
+                    pixels[y + j][x + i].palette_index = 30u;
+                    // Depth increases from 0 to 20 downward along the front
+                    // face.
+                    pixels[y + j][x + i].depth = j - sprite_height / 2;
                 }
             }
         }
     }
 };
 
-struct PixelArray {
-    uint32_t size = 0;
+struct PixelBucket {
+    // Size is a positive value, but it is signed to enable optimizations.
+    int32_t size = 0;
     Pixel pixels[8];
 
     // TODO: R-value reference?
@@ -92,7 +105,7 @@ struct PixelArray {
 struct Cell {
     // There are 4x4 containers to display in the cell, and each of them can
     // hold up to 8 pixels. This is height x width.
-    PixelArray pixel_buckets[4][4];
+    PixelBucket pixel_buckets[4][4];
 };
 
 // Pixel buffer data structure.
@@ -100,20 +113,18 @@ struct GpuPixelBuffer {
     Cell cells[75][120];
 
     void clear() {
-        for (uint32_t cell_y = 0; cell_y < 75; cell_y++) {
-            for (uint32_t cell_x = 0; cell_x < 120; cell_x++) {
-                for (uint32_t j = 0; j < 4; j++) {
-                    for (uint32_t i = 0; i < 4; i++) {
+        for (int32_t cell_y = 0; cell_y < 75; cell_y++) {
+            for (int32_t cell_x = 0; cell_x < 120; cell_x++) {
+                for (int32_t j = 0; j < 4; j++) {
+                    for (int32_t i = 0; i < 4; i++) {
                         this->cells[cell_y][cell_x].pixel_buckets[j][i].size =
                             0;
-                        for (uint32_t k = 0; k < 8; k++) {
+                        for (int32_t k = 0; k < 8; k++) {
                             Pixel& current_pixel = this->cells[cell_y][cell_x]
                                                        .pixel_buckets[j][i]
                                                        .pixels[k];
                             current_pixel.palette_index = 0;  // Blank color.
-                            current_pixel.depth = std::numeric_limits<
-                                decltype(current_pixel
-                                             .depth)>::max();  // Maximum depth.
+                            current_pixel.depth = max_depth;  // Maximum depth.
                         }
                     }
                 }
@@ -121,21 +132,21 @@ struct GpuPixelBuffer {
         }
     }
 
-    // TODO: Should there be an array abstraction?
-    void render_entities(Entity* p_entities, uint32_t entity_count,
+    // TODO: Remove this function.
+    void render_entities(Entity* p_entities, int32_t entity_count,
                          SpriteAtlas* p_sprite_atlas) {
-        for (uint32_t cube = 0; cube < entity_count; cube++) {
+        for (int32_t cube = 0; cube < entity_count; cube++) {
             Entity& current_entity = p_entities[cube];
 
-            for (uint32_t j = 0; j < current_entity.tex_h; j++) {
-                for (uint32_t i = 0; i < current_entity.tex_w; i++) {
+            for (int32_t j = 0; j < current_entity.tex_h; j++) {
+                for (int32_t i = 0; i < current_entity.tex_w; i++) {
                     // TODO: Extract current pixel lookup to function.
-                    uint32_t view_x = current_entity.x + i;
-                    uint32_t view_y = current_entity.y + j - current_entity.z;
-                    uint32_t cell_x = view_x / 4;
-                    uint32_t cell_y = view_y / 4;
+                    int32_t view_x = current_entity.x + i;
+                    int32_t view_y = current_entity.y + j - current_entity.z;
+                    int32_t cell_x = view_x / 4;
+                    int32_t cell_y = view_y / 4;
                     Cell& current_cell = this->cells[cell_y][cell_x];
-                    PixelArray& current_pixel_bucket =
+                    PixelBucket& current_pixel_bucket =
                         current_cell.pixel_buckets[view_y - cell_y * 4]
                                                   [view_x - cell_x * 4];
                     Pixel& current_pixel =
@@ -143,8 +154,7 @@ struct GpuPixelBuffer {
                                               [current_entity.tex_x + i];
                     current_pixel_bucket.push(Pixel{
                         .palette_index = current_pixel.palette_index,
-                        .depth = std::numeric_limits<
-                                     decltype(current_pixel.depth)>::max()
+                        .depth = max_depth
                                  // Y depth offset (along ground).
                                  - current_entity.y +
                                  current_pixel.depth
@@ -152,6 +162,34 @@ struct GpuPixelBuffer {
                                  - current_entity.z,
                     });
                 }
+            }
+        }
+    }
+
+    void draw_sprite(SpriteAtlas* p_sprite_atlas, int32_t x, int32_t y,
+                     int32_t z, int32_t tex_x, int32_t tex_y, int32_t tex_w,
+                     int32_t tex_h) {
+        for (int32_t i = 0; i < tex_w; i++) {
+            for (int32_t j = 0; j < tex_h; j++) {
+                int32_t view_x = x + i;
+                int32_t view_y = y + j - z;
+                int32_t cell_x = view_x / 4;
+                int32_t cell_y = view_y / 4;
+                Cell& current_cell = this->cells[cell_y][cell_x];
+                PixelBucket& current_pixel_bucket =
+                    current_cell.pixel_buckets[view_y - cell_y * 4]
+                                              [view_x - cell_x * 4];
+                Pixel& current_pixel =
+                    p_sprite_atlas->pixels[tex_y + j][tex_x + i];
+                current_pixel_bucket.push(Pixel{
+                    .palette_index = current_pixel.palette_index,
+                    .depth = max_depth
+                             // Y depth offset (along ground).
+                             - y +
+                             current_pixel.depth
+                             // Z depth offset (skyward).
+                             - z,
+                });
             }
         }
     }
@@ -163,14 +201,11 @@ auto main() -> int {
 
     SpriteAtlas* p_sprite_atlas = new (std::nothrow) SpriteAtlas();
 
-    for (int i = 0; i < p_sprite_atlas->atlas_width; i++) {
-        for (int j = 0; j < p_sprite_atlas->atlas_height; j++) {
+    for (int32_t i = 0; i < p_sprite_atlas->atlas_width; i++) {
+        for (int32_t j = 0; j < p_sprite_atlas->atlas_height; j++) {
             p_sprite_atlas->pixels[j][i] = Pixel{
                 .palette_index = 0,  // Blank color.
-                .depth = std::numeric_limits<
-                    decltype(p_sprite_atlas->pixels[j][i]
-                                 .depth)>::max(),  // Maximum
-                                                   // depth.
+                .depth = max_depth,
             };
         }
     }
@@ -181,16 +216,16 @@ auto main() -> int {
 
     // Initialize cubes.
     Entity cubes[8];
-    for (int i = 0; i < 8; i++) {
-        uint32_t rand_x = static_cast<uint32_t>(rand()) % (480u - 20u);
-        uint32_t rand_y = static_cast<uint32_t>(rand()) % (300u - 40u);
+    for (int32_t i = 0; i < 8; i++) {
+        int32_t rand_x = static_cast<int32_t>(rand()) % (480 - 20);
+        int32_t rand_y = static_cast<int32_t>(rand()) % (300 - 40);
         cubes[i].x = rand_x;
         cubes[i].y = rand_y;
-        cubes[i].z = 0u;
-        cubes[i].tex_x = 0u;
-        cubes[i].tex_y = 0u;
-        cubes[i].tex_w = 20u;
-        cubes[i].tex_h = 40u;
+        cubes[i].z = 0;
+        cubes[i].tex_x = 0;
+        cubes[i].tex_y = 0;
+        cubes[i].tex_w = 20;
+        cubes[i].tex_h = 40;
     }
 
     lava::frame_config config;
@@ -234,8 +269,9 @@ auto main() -> int {
     uint32_t max_workgroups =
         app.device->get_properties().limits.maxComputeWorkGroupInvocations;
     // TODO: I should hard-code this for now.
-    uint32_t const workgroup_width = view_width / 4;
-    uint32_t const workgroup_height = view_height / 4;
+    // VkCmdDispatch takes unsigned integers.
+    uint32_t const workgroup_width = view_width / 4u;
+    uint32_t const workgroup_height = view_height / 4u;
     uint32_t const workgroup_depth = 4;
 
     lava::graphics_pipeline::ptr raster_pipeline;

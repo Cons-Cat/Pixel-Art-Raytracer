@@ -9,16 +9,16 @@ RWStructuredBuffer<Cell> pixel_buffer_cells;
 
 struct Pixel {
     uint32_t palette_index;
-    uint32_t depth;
+    int32_t depth;
 }
 
-struct PixelArray {
-    uint32_t size;
+struct PixelBucket {
+    int32_t size;
     Pixel pixels[8];
 };
 
 struct Cell {
-    PixelArray pixel_buckets[4 * 4];
+    PixelBucket pixel_buckets[4 * 4];
 }
 
 struct GpuPixelBuffer {
@@ -31,7 +31,7 @@ void compute_main(uint3 group_id : SV_GroupID,
                   uint3 group_thread_id : SV_GroupThreadID,
                   uint3 dispatch_thread_id : SV_DispatchThreadID,
                   uint group_index : SV_GroupIndex) {
-    uint32_t min_depth = 255;
+    int32_t min_depth = 2147483647; // Maximum size of an int32_t.
     uint32_t current_cell = group_id.x + group_id.y * (480 / 4);
     uint32_t thread_x = group_thread_id.x; // Bounded in [0, 3] 
     uint32_t thread_y = group_thread_id.y; // Bounded in [0, 3]
@@ -43,7 +43,8 @@ void compute_main(uint3 group_id : SV_GroupID,
     // The last element should never try swapping with an element ahead of it.
 
     if (thread_z < 3) {
-        // TODO: I don't think 8 is guaranteed to be enough iterations.
+        // Parallel odd-even sort has O(N) time complexity, so we iterate through
+		// the size of a bucket, which is 8.
         for (uint32_t i = 0; i < 8; i++) {
             // TODO: There exist atomic-compare-exchange instructions that might
             // be more efficient than this algorithm.

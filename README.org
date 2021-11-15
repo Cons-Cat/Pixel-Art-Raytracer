@@ -3,7 +3,7 @@
 
 * Week 4
 ** DONE Depth sprite
-** TODO Color palette
-** TODO Correct 3D depth sorting
-** TODO Z movement
+** DONE Color palette
+** DONE Correct 3D depth sorting
+** DONE Z movement
 ** TODO Forward renderer

@@ -84,7 +84,6 @@ float3 oklab_to_linear_srgb(Lab c) {
     double l = l_*l_*l_;
     double m = m_*m_*m_;
     double s = s_*s_*s_;
-	min32float ma = 0;
 
     return {
 		+4.0767416621f * l - 3.3077115913f * m + 0.2309699292f * s,
