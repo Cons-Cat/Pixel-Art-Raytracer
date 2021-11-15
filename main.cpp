@@ -6,6 +6,8 @@
 #include <cstdlib>
 #include <cstring>
 #include <iostream>
+#include <limits.h>
+#include <limits>
 #include <string>
 
 #include "vulkan/vulkan_core.h"
@@ -77,7 +79,7 @@ struct SpriteAtlas {
 };
 
 struct PixelArray {
-    uint32_t size;
+    uint32_t size = 0;
     Pixel pixels[8];
 
     // TODO: R-value reference?
@@ -109,7 +111,9 @@ struct GpuPixelBuffer {
                                                        .pixel_buckets[j][i]
                                                        .pixels[k];
                             current_pixel.palette_index = 0;  // Blank color.
-                            current_pixel.depth = 255;        // Maximum depth.
+                            current_pixel.depth = std::numeric_limits<
+                                decltype(current_pixel
+                                             .depth)>::max();  // Maximum depth.
                         }
                     }
                 }
@@ -126,21 +130,26 @@ struct GpuPixelBuffer {
             for (uint32_t j = 0; j < current_entity.tex_h; j++) {
                 for (uint32_t i = 0; i < current_entity.tex_w; i++) {
                     // TODO: Extract current pixel lookup to function.
-                    uint32_t world_x = current_entity.x + i;
-                    uint32_t world_y = current_entity.y + j;
-                    uint32_t cell_x = world_x / 4;
-                    uint32_t cell_y = world_y / 4;
+                    uint32_t view_x = current_entity.x + i;
+                    uint32_t view_y = current_entity.y + j - current_entity.z;
+                    uint32_t cell_x = view_x / 4;
+                    uint32_t cell_y = view_y / 4;
                     Cell& current_cell = this->cells[cell_y][cell_x];
                     PixelArray& current_pixel_bucket =
-                        current_cell.pixel_buckets[world_y - cell_y * 4]
-                                                  [world_x - cell_x * 4];
+                        current_cell.pixel_buckets[view_y - cell_y * 4]
+                                                  [view_x - cell_x * 4];
                     Pixel& current_pixel =
                         p_sprite_atlas->pixels[current_entity.tex_y + j]
                                               [current_entity.tex_x + i];
                     current_pixel_bucket.push(Pixel{
                         .palette_index = current_pixel.palette_index,
-                        .depth = view_height - current_entity.y +
-                                 current_pixel.depth,
+                        .depth = std::numeric_limits<
+                                     decltype(current_pixel.depth)>::max()
+                                 // Y depth offset (along ground).
+                                 - current_entity.y +
+                                 current_pixel.depth
+                                 // Z depth offset (skyward).
+                                 - current_entity.z,
                     });
                 }
             }
@@ -158,7 +167,10 @@ auto main() -> int {
         for (int j = 0; j < p_sprite_atlas->atlas_height; j++) {
             p_sprite_atlas->pixels[j][i] = Pixel{
                 .palette_index = 0,  // Blank color.
-                .depth = 255,        // Maximum depth.
+                .depth = std::numeric_limits<
+                    decltype(p_sprite_atlas->pixels[j][i]
+                                 .depth)>::max(),  // Maximum
+                                                   // depth.
             };
         }
     }
@@ -174,7 +186,7 @@ auto main() -> int {
         uint32_t rand_y = static_cast<uint32_t>(rand()) % (300u - 40u);
         cubes[i].x = rand_x;
         cubes[i].y = rand_y;
-        cubes[i].z = 100u;
+        cubes[i].z = 0u;
         cubes[i].tex_x = 0u;
         cubes[i].tex_y = 0u;
         cubes[i].tex_w = 20u;
@@ -395,6 +407,7 @@ auto main() -> int {
     };
 
     app.on_destroy = [&]() {
+        // TODO: Clean more memory.
         compute_pipeline->destroy();
         compute_pipeline_layout->destroy();
         raster_pipeline->destroy();
@@ -427,8 +440,68 @@ auto main() -> int {
                              nullptr, 0, nullptr, 1, &image_memory_barrier);
     };
 
+    bool u, d, l, r, zu, zd = false;
+    app.input.key.listeners.add([&](lava::key_event::ref event) {
+        if (event.pressed(lava::key::down)) {
+            d = true;
+        }
+        if (event.released(lava::key::down)) {
+            d = false;
+        }
+        if (event.pressed(lava::key::up)) {
+            u = true;
+        }
+        if (event.released(lava::key::up)) {
+            u = false;
+        }
+        if (event.pressed(lava::key::left)) {
+            l = true;
+        }
+        if (event.released(lava::key::left)) {
+            l = false;
+        }
+        if (event.pressed(lava::key::right)) {
+            r = true;
+        }
+        if (event.released(lava::key::right)) {
+            r = false;
+        }
+        if (event.pressed(lava::key::page_up)) {
+            zu = true;
+        }
+        if (event.released(lava::key::page_up)) {
+            zu = false;
+        }
+        if (event.pressed(lava::key::page_down)) {
+            zd = true;
+        }
+        if (event.released(lava::key::page_down)) {
+            zd = false;
+        }
+        return true;
+    });
+
     app.on_update = [&](lava::delta) {
-        cubes[1].x += 1;
+        Entity& e = cubes[1];
+        if (r) {
+            e.x += 1;
+        }
+        if (l) {
+            e.x -= 1;
+        }
+        if (u) {
+            e.y -= 1;
+        }
+        if (d) {
+            e.y += 1;
+        }
+        if (zu) {
+            e.z += 1;
+        }
+        if (zd) {
+            e.z -= 1;
+        }
+
         p_pixel_buffer_data->clear();
         p_pixel_buffer_data->render_entities(cubes, 8, p_sprite_atlas);
         void* p_data;
