@@ -110,9 +110,12 @@ struct PixelBucket {
     // TODO: r-value reference?
     void push(Pixel pixel) {
         // TODO: Make this a ring buffer instead of saturated buffer.
-        if (this->size < 8) {
-            this->pixels[this->size] = pixel;
-            this->size++;
+        if (this->size < 8) [[likely]] {
+            // A clipping plane is 300 depth towards the camera.
+            if (pixel.depth > -600) [[likely]] {
+                this->pixels[this->size] = pixel;
+                this->size++;
+            }
         }
     }
 };
@@ -286,6 +289,10 @@ auto main() -> int {
 
     lava::compute_pipeline::ptr compute_pipeline;
     lava::pipeline_layout::ptr compute_pipeline_layout;
+
+    lava::compute_pipeline::ptr depth_pipeline;
+    lava::pipeline_layout::ptr depth_pipeline_layout;
+
     lava::pipeline::shader_stage::ptr shader_stage;
 
     VkCommandPool p_cmd_pool;
@@ -419,6 +426,17 @@ auto main() -> int {
             VK_SHADER_STAGE_COMPUTE_BIT);
         compute_pipeline->create();
 
+        // Create depth pipeline.
+        depth_pipeline = lava::make_compute_pipeline(app.device);
+        depth_pipeline_layout = lava::make_pipeline_layout();
+        depth_pipeline_layout->add_descriptor(shared_descriptor_layout);
+        depth_pipeline_layout->create(app.device);
+        depth_pipeline->set_layout(depth_pipeline_layout);
+        depth_pipeline->set_shader_stage(
+            lava::file_data(get_run_path() + SHADERS_PATH + "depth.spv"),
+            VK_SHADER_STAGE_COMPUTE_BIT);
+        depth_pipeline->create();
+
         // Make raster pipeline.
         raster_pipeline = lava::make_graphics_pipeline(app.device);
         raster_pipeline->add_shader(
@@ -457,12 +475,27 @@ auto main() -> int {
         raster_pipeline_layout->destroy();
     };
 
+    enum RenderMode
+    {
+        MIX = 0,
+        DEPTH,
+    };
+    RenderMode render_mode = MIX;
     app.on_process = [&](VkCommandBuffer p_cmd_buf, lava::index) {
         // A command buffer is automatically recording.
-        compute_pipeline->bind(p_cmd_buf);
-        compute_pipeline_layout->bind_descriptor_set(
-            p_cmd_buf, p_shared_descriptor_set_image, 0, {},
-            VK_PIPELINE_BIND_POINT_COMPUTE);
+
+        if (render_mode == MIX) {
+            compute_pipeline->bind(p_cmd_buf);
+            compute_pipeline_layout->bind_descriptor_set(
+                p_cmd_buf, p_shared_descriptor_set_image, 0, {},
+                VK_PIPELINE_BIND_POINT_COMPUTE);
+        } else if (render_mode == DEPTH) {
+            depth_pipeline->bind(p_cmd_buf);
+            depth_pipeline_layout->bind_descriptor_set(
+                p_cmd_buf, p_shared_descriptor_set_image, 0, {},
+                VK_PIPELINE_BIND_POINT_COMPUTE);
+        }
+
         vkCmdDispatch(p_cmd_buf, workgroup_width, workgroup_height,
                       workgroup_depth);
 
@@ -520,6 +553,11 @@ auto main() -> int {
         }
         if (event.released(lava::key::page_down)) {
             zd = false;
+        }
+        if (event.pressed(lava::key::_1)) {
+            render_mode = MIX;
+        } else if (event.pressed(lava::key::_2)) {
+            render_mode = DEPTH;
         }
         return true;
     });
