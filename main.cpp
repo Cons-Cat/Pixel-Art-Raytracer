@@ -46,7 +46,7 @@ uint32_t view_height = 300u;
 // TODO: Figure out struct packing and half precision floats across C++ and
 // Slang.
 struct Pixel {
-    alignas(16) float normals[3];
+    alignas(16) std::array<float, 3> normals;
     alignas(4) float alpha;
     alignas(4) int32_t depth;
     alignas(4) uint32_t palette_index;
@@ -97,6 +97,7 @@ struct SpriteAtlas {
                 int32_t const pixel_index =
                     (atlas_index * sprite_width * sprite_height) +
                     j * sprite_width + i;
+                pixels[pixel_index].normals = {0.f, 1.f, 0.f};
                 pixels[pixel_index].palette_index = 31u;
                 // Depth increases from 0 to 20 backwards along the top
                 // face.
@@ -111,6 +112,7 @@ struct SpriteAtlas {
                 int32_t const pixel_index =
                     (atlas_index * sprite_width * sprite_height) +
                     j * sprite_width + i;
+                pixels[pixel_index].normals = {0.f, 0.f, 1.f};
                 pixels[pixel_index].palette_index = 30u;
                 // Depth increases from 0 to 20 downward along the front
                 // face.
@@ -177,6 +179,7 @@ struct GpuPixelBuffer {
                     current_cell.pixel_buckets[view_y - cell_y * 4]
                                               [view_x - cell_x * 4];
                 current_pixel_bucket.push(Pixel{
+                    .normals = current_pixel.normals,
                     .depth = current_pixel.depth
                              // Y depth offset (along ground).
                              - world_y
@@ -293,6 +296,9 @@ auto main() -> int {
 
     lava::compute_pipeline::ptr depth_pipeline;
     lava::pipeline_layout::ptr depth_pipeline_layout;
+
+    lava::compute_pipeline::ptr normals_pipeline;
+    lava::pipeline_layout::ptr normals_pipeline_layout;
 
     lava::pipeline::shader_stage::ptr shader_stage;
 
@@ -438,6 +444,17 @@ auto main() -> int {
             VK_SHADER_STAGE_COMPUTE_BIT);
         depth_pipeline->create();
 
+        // Create normals pipeline.
+        normals_pipeline = lava::make_compute_pipeline(app.device);
+        normals_pipeline_layout = lava::make_pipeline_layout();
+        normals_pipeline_layout->add_descriptor(shared_descriptor_layout);
+        normals_pipeline_layout->create(app.device);
+        normals_pipeline->set_layout(normals_pipeline_layout);
+        normals_pipeline->set_shader_stage(
+            lava::file_data(get_run_path() + SHADERS_PATH + "normals.spv"),
+            VK_SHADER_STAGE_COMPUTE_BIT);
+        normals_pipeline->create();
+
         // Make raster pipeline.
         raster_pipeline = lava::make_graphics_pipeline(app.device);
         raster_pipeline->add_shader(
@@ -480,6 +497,7 @@ auto main() -> int {
     {
         COLOR = 0,
         DEPTH,
+        NORMALS,
     };
     RenderMode render_mode = COLOR;
     app.on_process = [&](VkCommandBuffer p_cmd_buf, lava::index) {
@@ -493,6 +511,11 @@ auto main() -> int {
         } else if (render_mode == DEPTH) {
             depth_pipeline->bind(p_cmd_buf);
             depth_pipeline_layout->bind_descriptor_set(
+                p_cmd_buf, p_shared_descriptor_set_image, 0, {},
+                VK_PIPELINE_BIND_POINT_COMPUTE);
+        } else if (render_mode == NORMALS) {
+            normals_pipeline->bind(p_cmd_buf);
+            normals_pipeline_layout->bind_descriptor_set(
                 p_cmd_buf, p_shared_descriptor_set_image, 0, {},
                 VK_PIPELINE_BIND_POINT_COMPUTE);
         }
@@ -559,6 +582,8 @@ auto main() -> int {
             render_mode = COLOR;
         } else if (event.pressed(lava::key::_2)) {
             render_mode = DEPTH;
+        } else if (event.pressed(lava::key::_3)) {
+            render_mode = NORMALS;
         }
         return true;
     });

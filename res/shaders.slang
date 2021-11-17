@@ -124,12 +124,10 @@ void depth_main(uint3 group_id : SV_GroupID,
             .pixels[0];
 
         // Depth visualization.
-        if (nearest_pixel.palette_index != 3) {
-		    // 600.0f is an arbitrary clipping plane.
-            float depth_color = -(float)nearest_pixel.depth / 600.0f;
-            uav[dispatch_thread_id.xy] =
-			float4(depth_color, depth_color, depth_color, 1);
-        }
+		// 600.0f is an arbitrary clipping plane.
+        float depth_color = -(float)nearest_pixel.depth / 600.0f;
+        uav[dispatch_thread_id.xy] =
+		    float4(depth_color, depth_color, depth_color, 1);
     }
 }
 
@@ -156,12 +154,9 @@ void normals_main(uint3 group_id : SV_GroupID,
             .pixel_buckets[thread_bucket_index]
             .pixels[0];
 
-        // Depth visualization.
-        if (nearest_pixel.palette_index != 3) {
-		    // 600.0f is an arbitrary clipping plane.
-            // float3 normal_color = nearest_pixel.normals;
-            // uav[dispatch_thread_id.xy] = float4(normal_color, 1);
-        }
+        // Normals visualization.
+        float3 normal_color = nearest_pixel.normals;
+        uav[dispatch_thread_id.xy] = float4(normal_color, 1);
     }
 }
 
