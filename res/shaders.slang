@@ -25,27 +25,18 @@ struct GpuPixelBuffer {
     Cell cells[75 * 120];
 }
 
-// 3D lighting and depth sorting shader.
-[shader("compute")]
-[numthreads(4, 4, 4)]
-void compute_main(uint3 group_id : SV_GroupID,
-                  uint3 group_thread_id : SV_GroupThreadID,
-                  uint3 dispatch_thread_id : SV_DispatchThreadID,
-                  uint group_index : SV_GroupIndex) {
-    int32_t min_depth = 2147483647; // Maximum size of an int32_t.
-    uint32_t current_cell = group_id.x + group_id.y * (480 / 4);
-    uint32_t thread_x = group_thread_id.x; // Bounded in [0, 3] 
-    uint32_t thread_y = group_thread_id.y; // Bounded in [0, 3]
-    uint32_t thread_z = group_thread_id.z; // Bounded in [0, 3]
-    uint32_t thread_bucket_index = thread_x + thread_y * 4;
+// Thread ids are inherently unsigned.
+void sort_pixel_bucket(uint32_t thread_x, uint32_t thread_y, uint32_t thread_z,
+                       uint32_t thread_bucket_index, uint32_t current_cell,
+					   bool thread_is_even) {
     uint32_t thread_pixel_index = thread_z * 2;
-    bool thread_is_even = dispatch_thread_id.z % 2 == 0;
-
+    int32_t min_depth = 2147483647; // Maximum size of an int32_t.
+	
     // The last element should never try swapping with an element ahead of it.
     if (thread_z < 3) {
         // Parallel odd-even sort has O(N) time complexity, so we iterate through
         // the size of a bucket, which is 8.
-        for (uint32_t i = 0; i < 8; i++) {
+        for (int32_t i = 0; i < 8; i++) {
             // TODO: There exist atomic-compare-exchange instructions that might
             // be more efficient than this algorithm.
             uint32_t odd_sort = (i + 1) % 2;
@@ -77,6 +68,24 @@ void compute_main(uint3 group_id : SV_GroupID,
             }
         }
     }
+}
+
+[shader("compute")]
+[numthreads(4, 4, 4)]
+void color_main(uint3 group_id : SV_GroupID,
+                  uint3 group_thread_id : SV_GroupThreadID,
+                  uint3 dispatch_thread_id : SV_DispatchThreadID,
+                  uint group_index : SV_GroupIndex) {
+    uint32_t thread_x = group_thread_id.x; // Bounded in [0, 3] 
+    uint32_t thread_y = group_thread_id.y; // Bounded in [0, 3]
+    uint32_t thread_z = group_thread_id.z; // Bounded in [0, 3]
+    uint32_t thread_bucket_index = thread_x + thread_y * 4;
+    uint32_t current_cell = group_id.x + group_id.y * (480 / 4);
+    bool thread_is_even = dispatch_thread_id.z % 2 == 0;
+
+    sort_pixel_bucket(thread_x, thread_y, thread_z,
+                      thread_bucket_index, current_cell,
+					  thread_is_even);
  
     if (thread_z == 0) {
         // The first element is the lowest depth after sorting.
@@ -90,58 +99,22 @@ void compute_main(uint3 group_id : SV_GroupID,
     }
 }
 
-// Depth rendering debug shader.
 [shader("compute")]
 [numthreads(4, 4, 4)]
 void depth_main(uint3 group_id : SV_GroupID,
                   uint3 group_thread_id : SV_GroupThreadID,
                   uint3 dispatch_thread_id : SV_DispatchThreadID,
                   uint group_index : SV_GroupIndex) {
-    int32_t min_depth = 2147483647; // Maximum size of an int32_t.
-    uint32_t current_cell = group_id.x + group_id.y * (480 / 4);
     uint32_t thread_x = group_thread_id.x; // Bounded in [0, 3] 
     uint32_t thread_y = group_thread_id.y; // Bounded in [0, 3]
     uint32_t thread_z = group_thread_id.z; // Bounded in [0, 3]
     uint32_t thread_bucket_index = thread_x + thread_y * 4;
-    uint32_t thread_pixel_index = thread_z * 2;
+    uint32_t current_cell = group_id.x + group_id.y * (480 / 4);
     bool thread_is_even = dispatch_thread_id.z % 2 == 0;
 
-    // The last element should never try swapping with an element ahead of it.
-    if (thread_z < 3) {
-        // Parallel odd-even sort has O(N) time complexity, so we iterate through
-        // the size of a bucket, which is 8.
-        for (uint32_t i = 0; i < 8; i++) {
-            // TODO: There exist atomic-compare-exchange instructions that might
-            // be more efficient than this algorithm.
-            uint32_t odd_sort = (i + 1) % 2;
-
-            // Odd sort:
-            Pixel temp_pixel = pixel_buffer_cells[current_cell]
-            .pixel_buckets[thread_bucket_index]
-            .pixels[thread_pixel_index + odd_sort];
-                    
-            if (pixel_buffer_cells[current_cell]
-            .pixel_buckets[thread_bucket_index]
-            .pixels[thread_pixel_index + odd_sort + 1]
-            .depth < temp_pixel.depth) {
-                pixel_buffer_cells[current_cell]
-                .pixel_buckets[thread_bucket_index]
-                .pixels[thread_pixel_index + odd_sort] =
-                        pixel_buffer_cells[current_cell]
-                        .pixel_buckets[thread_bucket_index]
-                        .pixels[thread_pixel_index + odd_sort + 1];
-                    
-                pixel_buffer_cells[current_cell]
-                .pixel_buckets[thread_bucket_index]
-                .pixels[thread_pixel_index + odd_sort + 1] = temp_pixel;
-            }
-
-            // Waiting is only necessary when sorting across groups.
-            if (odd_sort == 1) {
-               GroupMemoryBarrierWithGroupSync();
-            }
-        }
-    }
+    sort_pixel_bucket(thread_x, thread_y, thread_z,
+                      thread_bucket_index, current_cell,
+					  thread_is_even);
  
     if (thread_z == 0) {
         // The first element is the lowest depth after sorting.
@@ -151,7 +124,8 @@ void depth_main(uint3 group_id : SV_GroupID,
 
         // Depth visualization.
         if (nearest_pixel.palette_index != 3) {
-            float depth_col = -(float)nearest_pixel.depth / (600.0f);
+		    // 600.0f is an arbitrary clipping plane.
+            float depth_col = -(float)nearest_pixel.depth / 600.0f;
             uav[dispatch_thread_id.xy] = float4(depth_col, depth_col, depth_col, 1);
         }
     }

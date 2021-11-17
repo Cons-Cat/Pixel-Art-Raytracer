@@ -111,7 +111,7 @@ struct PixelBucket {
     void push(Pixel pixel) {
         // TODO: Make this a ring buffer instead of saturated buffer.
         if (this->size < 8) [[likely]] {
-            // A clipping plane is 300 depth towards the camera.
+            // A clipping plane is arbitrarily 600 depth towards the camera.
             if (pixel.depth > -600) [[likely]] {
                 this->pixels[this->size] = pixel;
                 this->size++;
@@ -422,7 +422,7 @@ auto main() -> int {
         compute_pipeline_layout->create(app.device);
         compute_pipeline->set_layout(compute_pipeline_layout);
         compute_pipeline->set_shader_stage(
-            lava::file_data(get_run_path() + SHADERS_PATH + "compute.spv"),
+            lava::file_data(get_run_path() + SHADERS_PATH + "color.spv"),
             VK_SHADER_STAGE_COMPUTE_BIT);
         compute_pipeline->create();
 
@@ -477,14 +477,14 @@ auto main() -> int {
 
     enum RenderMode
     {
-        MIX = 0,
+        COLOR = 0,
         DEPTH,
     };
-    RenderMode render_mode = MIX;
+    RenderMode render_mode = COLOR;
     app.on_process = [&](VkCommandBuffer p_cmd_buf, lava::index) {
         // A command buffer is automatically recording.
 
-        if (render_mode == MIX) {
+        if (render_mode == COLOR) {
             compute_pipeline->bind(p_cmd_buf);
             compute_pipeline_layout->bind_descriptor_set(
                 p_cmd_buf, p_shared_descriptor_set_image, 0, {},
@@ -555,7 +555,7 @@ auto main() -> int {
             zd = false;
         }
         if (event.pressed(lava::key::_1)) {
-            render_mode = MIX;
+            render_mode = COLOR;
         } else if (event.pressed(lava::key::_2)) {
             render_mode = DEPTH;
         }
