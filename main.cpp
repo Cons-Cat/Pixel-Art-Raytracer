@@ -43,13 +43,38 @@ inline auto get_run_path() -> std::string {
 uint32_t view_width = 480u;
 uint32_t view_height = 300u;
 
+// TODO: Figure out struct packing and half precision floats across C++ and
+// Slang.
 struct Pixel {
-    uint32_t palette_index;
-    int32_t depth;
+    alignas(16) float normals[3];
+    alignas(4) float alpha;
+    alignas(4) int32_t depth;
+    alignas(4) uint32_t palette_index;
 };
 
-constexpr int32_t max_depth =
-    std::numeric_limits<decltype(Pixel::depth)>::max();
+struct PixelBucket {
+    // Size is a positive value, but it is signed to enable optimizations.
+    alignas(4) int32_t size = 0;
+    Pixel pixels[8];
+
+    // TODO: r-value reference?
+    void push(Pixel pixel) {
+        // TODO: Make this a ring buffer instead of saturated buffer.
+        if (this->size < 8) [[likely]] {
+            // A clipping plane is arbitrarily 600 depth towards the camera.
+            if (pixel.depth > -600) [[likely]] {
+                this->pixels[this->size] = pixel;
+                this->size++;
+            }
+        }
+    }
+};
+
+struct Cell {
+    // There are 4x4 containers to display in the cell, and each of them can
+    // hold up to 8 pixels. This is height x width.
+    PixelBucket pixel_buckets[4][4];
+};
 
 struct Sprite {
     // All sprites are 20x20.
@@ -59,7 +84,7 @@ struct Sprite {
 };
 
 struct SpriteAtlas {
-    static constexpr uint32_t sprites_count = 2;
+    static constexpr int32_t sprites_count = 2;
     static constexpr int32_t sprite_width = 20;
     static constexpr int32_t sprite_height = 20;
     Pixel pixels[sprites_count * sprite_width * sprite_height];
@@ -100,30 +125,6 @@ struct Entity {
     int32_t origin_x, origin_y, origin_z;
     int32_t sprites_count = 0;
     Sprite* sprites;
-};
-
-struct PixelBucket {
-    // Size is a positive value, but it is signed to enable optimizations.
-    int32_t size = 0;
-    Pixel pixels[8];
-
-    // TODO: r-value reference?
-    void push(Pixel pixel) {
-        // TODO: Make this a ring buffer instead of saturated buffer.
-        if (this->size < 8) [[likely]] {
-            // A clipping plane is arbitrarily 600 depth towards the camera.
-            if (pixel.depth > -600) [[likely]] {
-                this->pixels[this->size] = pixel;
-                this->size++;
-            }
-        }
-    }
-};
-
-struct Cell {
-    // There are 4x4 containers to display in the cell, and each of them can
-    // hold up to 8 pixels. This is height x width.
-    PixelBucket pixel_buckets[4][4];
 };
 
 // Pixel buffer data structure.
@@ -176,12 +177,12 @@ struct GpuPixelBuffer {
                     current_cell.pixel_buckets[view_y - cell_y * 4]
                                               [view_x - cell_x * 4];
                 current_pixel_bucket.push(Pixel{
-                    .palette_index = current_pixel.palette_index,
                     .depth = current_pixel.depth
                              // Y depth offset (along ground).
                              - world_y
                              // Z depth offset (skyward).
                              - world_z,
+                    .palette_index = current_pixel.palette_index,
                 });
             }
         }
@@ -198,8 +199,8 @@ auto main() -> int {
         for (int32_t i = 0; i < p_sprite_atlas->sprite_width; i++) {
             p_sprite_atlas->pixels[i + j * p_sprite_atlas->sprite_width] =
                 Pixel{
-                    .palette_index = 0,
                     .depth = 0,
+                    .palette_index = 0,
                 };
         }
     }
@@ -600,7 +601,7 @@ auto main() -> int {
         vkMapMemory(app.device->get(),
                     pixel_buffer_staging->get_device_memory(), 0,
                     pixel_buffer_staging->get_size(), 0, &p_data);
-        memcpy(p_data, p_pixel_buffer_data, sizeof(*p_pixel_buffer_data));
+        memcpy(p_data, p_pixel_buffer_data, sizeof(GpuPixelBuffer));
         vkUnmapMemory(app.device->get(),
                       pixel_buffer_staging->get_device_memory());
         auto fn_one_time_cmd = [&](VkCommandBuffer p_cmd_buf) {

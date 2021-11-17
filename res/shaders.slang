@@ -8,9 +8,11 @@ RWTexture2D<float4> uav;
 RWStructuredBuffer<Cell> pixel_buffer_cells;
 
 struct Pixel {
-    uint32_t palette_index;
+    float3 normals;
+	float alpha;
     int32_t depth;
-}
+	uint32_t palette_index;
+};
 
 struct PixelBucket {
     int32_t size;
@@ -19,18 +21,17 @@ struct PixelBucket {
 
 struct Cell {
     PixelBucket pixel_buckets[4 * 4];
-}
+};
 
 struct GpuPixelBuffer {
     Cell cells[75 * 120];
-}
+};
 
 // Thread ids are inherently unsigned.
 void sort_pixel_bucket(uint32_t thread_x, uint32_t thread_y, uint32_t thread_z,
                        uint32_t thread_bucket_index, uint32_t current_cell,
 					   bool thread_is_even) {
     uint32_t thread_pixel_index = thread_z * 2;
-    int32_t min_depth = 2147483647; // Maximum size of an int32_t.
 	
     // The last element should never try swapping with an element ahead of it.
     if (thread_z < 3) {
@@ -93,7 +94,7 @@ void color_main(uint3 group_id : SV_GroupID,
             .pixel_buckets[thread_bucket_index]
             .pixels[0];
 
-        Lab color = color_palette[nearest_pixel.palette_index];
+        Lab color = color_palette[(int)nearest_pixel.palette_index];
         float3 rgb = oklab_to_linear_srgb(color);
         uav[dispatch_thread_id.xy] = float4(rgb, 1.0f);
     }
@@ -125,12 +126,44 @@ void depth_main(uint3 group_id : SV_GroupID,
         // Depth visualization.
         if (nearest_pixel.palette_index != 3) {
 		    // 600.0f is an arbitrary clipping plane.
-            float depth_col = -(float)nearest_pixel.depth / 600.0f;
-            uav[dispatch_thread_id.xy] = float4(depth_col, depth_col, depth_col, 1);
+            float depth_color = -(float)nearest_pixel.depth / 600.0f;
+            uav[dispatch_thread_id.xy] =
+			float4(depth_color, depth_color, depth_color, 1);
         }
     }
 }
 
+[shader("compute")]
+[numthreads(4, 4, 4)]
+void normals_main(uint3 group_id : SV_GroupID,
+                  uint3 group_thread_id : SV_GroupThreadID,
+                  uint3 dispatch_thread_id : SV_DispatchThreadID,
+                  uint group_index : SV_GroupIndex) {
+    uint32_t thread_x = group_thread_id.x; // Bounded in [0, 3] 
+    uint32_t thread_y = group_thread_id.y; // Bounded in [0, 3]
+    uint32_t thread_z = group_thread_id.z; // Bounded in [0, 3]
+    uint32_t thread_bucket_index = thread_x + thread_y * 4;
+    uint32_t current_cell = group_id.x + group_id.y * (480 / 4);
+    bool thread_is_even = dispatch_thread_id.z % 2 == 0;
+
+    sort_pixel_bucket(thread_x, thread_y, thread_z,
+                      thread_bucket_index, current_cell,
+					  thread_is_even);
+ 
+    if (thread_z == 0) {
+        // The first element is the lowest depth after sorting.
+        Pixel nearest_pixel = pixel_buffer_cells[current_cell]
+            .pixel_buckets[thread_bucket_index]
+            .pixels[0];
+
+        // Depth visualization.
+        if (nearest_pixel.palette_index != 3) {
+		    // 600.0f is an arbitrary clipping plane.
+            // float3 normal_color = nearest_pixel.normals;
+            // uav[dispatch_thread_id.xy] = float4(normal_color, 1);
+        }
+    }
+}
 
 // Output from vertex shader.
 struct VertexStageOutput {
