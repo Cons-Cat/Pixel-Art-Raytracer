@@ -75,7 +75,7 @@ struct SpriteAtlas {
                 pixels[pixel_index].palette_index = 31u;
                 // Depth increases from 0 to 20 backwards along the top
                 // face.
-                pixels[pixel_index].depth = 0;
+                pixels[pixel_index].depth = j;
             }
         }
     }
