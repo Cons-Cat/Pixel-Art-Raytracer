@@ -4,11 +4,14 @@ import palette;
 [vk::binding(0, 0)]
 RWTexture2D<float4> uav;
 
+// TODO: Should this be a cbuffer?
 [vk::binding(1, 0)]
-RWStructuredBuffer<Cell> pixel_buffer_cells;
+RWStructuredBuffer<GpuPixelBuffer> gpu_buffer;
 
+// TODO: Assess performance characteristics
+//       https://developer.nvidia.com/content/understanding-structured-buffer-performance
 struct Pixel {
-    float3 normals;
+    float3 normal;
 	float alpha;
     int32_t depth;
 	uint32_t palette_index;
@@ -23,8 +26,15 @@ struct Cell {
     PixelBucket pixel_buckets[4 * 4];
 };
 
+struct PointLight {
+    int3 position;
+};
+
+static const int point_light_count = 1;
+
 struct GpuPixelBuffer {
     Cell cells[75 * 120];
+	PointLight point_lights[point_light_count];
 };
 
 // Thread ids are inherently unsigned.
@@ -33,6 +43,7 @@ void sort_pixel_bucket(uint32_t thread_x, uint32_t thread_y, uint32_t thread_z,
 					   bool thread_is_even) {
     uint32_t thread_pixel_index = thread_z * 2;
 	
+    // TODO: Dissassemble -O2 to see if this check should be at the function's call site.
     // The last element should never try swapping with an element ahead of it.
     if (thread_z < 3) {
         // Parallel odd-even sort has O(N) time complexity, so we iterate through
@@ -43,22 +54,22 @@ void sort_pixel_bucket(uint32_t thread_x, uint32_t thread_y, uint32_t thread_z,
             uint32_t odd_sort = (i + 1) % 2;
 
             // Odd sort:
-            Pixel temp_pixel = pixel_buffer_cells[current_cell]
+            Pixel temp_pixel = gpu_buffer[0].cells[current_cell]
             .pixel_buckets[thread_bucket_index]
             .pixels[thread_pixel_index + odd_sort];
                     
-            if (pixel_buffer_cells[current_cell]
+            if (gpu_buffer[0].cells[current_cell]
             .pixel_buckets[thread_bucket_index]
             .pixels[thread_pixel_index + odd_sort + 1]
             .depth < temp_pixel.depth) {
-                pixel_buffer_cells[current_cell]
+                gpu_buffer[0].cells[current_cell]
                 .pixel_buckets[thread_bucket_index]
                 .pixels[thread_pixel_index + odd_sort] =
-                        pixel_buffer_cells[current_cell]
+                        gpu_buffer[0].cells[current_cell]
                         .pixel_buckets[thread_bucket_index]
                         .pixels[thread_pixel_index + odd_sort + 1];
                     
-                pixel_buffer_cells[current_cell]
+                gpu_buffer[0].cells[current_cell]
                 .pixel_buckets[thread_bucket_index]
                 .pixels[thread_pixel_index + odd_sort + 1] = temp_pixel;
             }
@@ -84,17 +95,41 @@ void color_main(uint3 group_id : SV_GroupID,
     uint32_t current_cell = group_id.x + group_id.y * (480 / 4);
     bool thread_is_even = dispatch_thread_id.z % 2 == 0;
 
+    if (gpu_buffer[0].cells[current_cell].pixel_buckets[thread_bucket_index].pixels[0].palette_index == 0){
+	        uav[dispatch_thread_id.xy] = float4(0, 0, 0, 1.0f);
+	return;}
+	
     sort_pixel_bucket(thread_x, thread_y, thread_z,
                       thread_bucket_index, current_cell,
 					  thread_is_even);
  
     if (thread_z == 0) {
         // The first element is the lowest depth after sorting.
-        Pixel nearest_pixel = pixel_buffer_cells[current_cell]
+        Pixel nearest_pixel = gpu_buffer[0].cells[current_cell]
             .pixel_buckets[thread_bucket_index]
             .pixels[0];
 
         Lab color = color_palette[(int)nearest_pixel.palette_index];
+		// TODO: Bruh.
+
+        float3 position = float3(
+		    dispatch_thread_id.x,
+			dispatch_thread_id.y + float3(0, 0.5f, 0).y * nearest_pixel.depth, 
+			dispatch_thread_id.z + float3(0, 0, 0.5f).z * nearest_pixel.depth, 
+        );
+		// 0.5f ambient lighting.
+		float brightness = 0.0f;
+        for(int i = 0; i < point_light_count; i++) {
+		    // Calculate reflection of this light.
+			// TODO: Optimize point_lights int3 to float3 cast.
+			float3 light_vector =
+			    normalize(gpu_buffer[0].point_lights[i].position - float3(position));
+			brightness = max(dot(light_vector, nearest_pixel.normal), 0.65f);
+        }
+
+        color.L *= brightness;
+		color.a *= brightness;
+		color.b *= brightness;
         float3 rgb = oklab_to_linear_srgb(color);
         uav[dispatch_thread_id.xy] = float4(rgb, 1.0f);
     }
@@ -119,13 +154,14 @@ void depth_main(uint3 group_id : SV_GroupID,
  
     if (thread_z == 0) {
         // The first element is the lowest depth after sorting.
-        Pixel nearest_pixel = pixel_buffer_cells[current_cell]
+        Pixel nearest_pixel = gpu_buffer[0].cells[current_cell]
             .pixel_buckets[thread_bucket_index]
             .pixels[0];
 
         // Depth visualization.
-		// 600.0f is an arbitrary clipping plane.
-        float depth_color = -(float)nearest_pixel.depth / 600.0f;
+		// Become brighter as approaching the clipping plane.
+        float depth_color = -(float)nearest_pixel.depth /
+		    sqrt(300 * 300 + 300 * 300);
         uav[dispatch_thread_id.xy] =
 		    float4(depth_color, depth_color, depth_color, 1);
     }
@@ -150,12 +186,12 @@ void normals_main(uint3 group_id : SV_GroupID,
  
     if (thread_z == 0) {
         // The first element is the lowest depth after sorting.
-        Pixel nearest_pixel = pixel_buffer_cells[current_cell]
+        Pixel nearest_pixel = gpu_buffer[0].cells[current_cell]
             .pixel_buckets[thread_bucket_index]
             .pixels[0];
 
         // Normals visualization.
-        float3 normal_color = nearest_pixel.normals;
+        float3 normal_color = nearest_pixel.normal;
         uav[dispatch_thread_id.xy] = float4(normal_color, 1);
     }
 }

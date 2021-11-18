@@ -10,6 +10,7 @@
 #include <limits>
 #include <string>
 
+#include "liblava/resource/format.hpp"
 #include "vulkan/vulkan_core.h"
 
 // TODO: Automate this in CMake.
@@ -46,7 +47,7 @@ uint32_t view_height = 300u;
 // TODO: Figure out struct packing and half precision floats across C++ and
 // Slang.
 struct Pixel {
-    alignas(16) std::array<float, 3> normals;
+    alignas(16) std::array<float, 3> normal;
     alignas(4) float alpha;
     alignas(4) int32_t depth;
     alignas(4) uint32_t palette_index;
@@ -61,8 +62,8 @@ struct PixelBucket {
     void push(Pixel pixel) {
         // TODO: Make this a ring buffer instead of saturated buffer.
         if (this->size < 8) [[likely]] {
-            // A clipping plane is arbitrarily 600 depth towards the camera.
-            if (pixel.depth > -600) [[likely]] {
+            // Don't push pixels beyond a clipping plane.
+            if (pixel.depth > -sqrt(300 * 300 + 300 * 300)) [[likely]] {
                 this->pixels[this->size] = pixel;
                 this->size++;
             }
@@ -74,6 +75,10 @@ struct Cell {
     // There are 4x4 containers to display in the cell, and each of them can
     // hold up to 8 pixels. This is height x width.
     PixelBucket pixel_buckets[4][4];
+};
+
+struct PointLight {
+    alignas(16) std::array<int32_t, 3> position;
 };
 
 struct Sprite {
@@ -97,7 +102,7 @@ struct SpriteAtlas {
                 int32_t const pixel_index =
                     (atlas_index * sprite_width * sprite_height) +
                     j * sprite_width + i;
-                pixels[pixel_index].normals = {0.f, 1.f, 0.f};
+                pixels[pixel_index].normal = {0.f, 1.f, 0.f};
                 pixels[pixel_index].palette_index = 31u;
                 // Depth increases from 0 to 20 backwards along the top
                 // face.
@@ -112,7 +117,7 @@ struct SpriteAtlas {
                 int32_t const pixel_index =
                     (atlas_index * sprite_width * sprite_height) +
                     j * sprite_width + i;
-                pixels[pixel_index].normals = {0.f, 0.f, 1.f};
+                pixels[pixel_index].normal = {0.f, 0.f, 1.f};
                 pixels[pixel_index].palette_index = 30u;
                 // Depth increases from 0 to 20 downward along the front
                 // face.
@@ -127,11 +132,17 @@ struct Entity {
     int32_t origin_x, origin_y, origin_z;
     int32_t sprites_count = 0;
     Sprite* sprites;
+
+    auto get_origin() -> std::array<int32_t, 3> {
+        return {origin_x, origin_y, origin_z};
+    }
 };
 
 // Pixel buffer data structure.
 struct GpuPixelBuffer {
     Cell cells[75][120];
+    static constexpr int32_t point_light_count = 1;
+    PointLight point_lights[point_light_count];
 
     void clear() {
         for (int32_t cell_y = 0; cell_y < 75; cell_y++) {
@@ -179,7 +190,7 @@ struct GpuPixelBuffer {
                     current_cell.pixel_buckets[view_y - cell_y * 4]
                                               [view_x - cell_x * 4];
                 current_pixel_bucket.push(Pixel{
-                    .normals = current_pixel.normals,
+                    .normal = current_pixel.normal,
                     .depth = current_pixel.depth
                              // Y depth offset (along ground).
                              - world_y
@@ -212,6 +223,9 @@ auto main() -> int {
 
     GpuPixelBuffer* p_pixel_buffer_data = new (std::nothrow) GpuPixelBuffer();
     p_pixel_buffer_data->clear();
+    for (int i = 0; i < p_pixel_buffer_data->point_light_count; i++) {
+        p_pixel_buffer_data->point_lights[i].position = {0, 10, 10};
+    }
 
     // Initialize cubes.
     Entity cubes[8];
@@ -248,6 +262,13 @@ auto main() -> int {
                                        "VK_KHR_get_physical_device_properties2",
                                    });
     lava::app app(config);
+    app.config = {
+        .surface =
+            lava::surface_format_request{
+                .formats = {VK_FORMAT_R8G8B8A8_UNORM},
+                .color_space = VK_COLOR_SPACE_EXTENDED_SRGB_LINEAR_EXT,
+            },
+    };
     VkPhysicalDevice8BitStorageFeatures features_2 = {
         .sType = VK_STRUCTURE_TYPE_PHYSICAL_DEVICE_8BIT_STORAGE_FEATURES,
         .pNext = nullptr,
@@ -309,6 +330,8 @@ auto main() -> int {
     VkDescriptorSet p_shared_descriptor_set_image = nullptr;
     VkDescriptorSet p_shared_descriptor_set_pixels = nullptr;
 
+    // Our Oklab color conversions already give us sRGB colors, so we want to
+    // sample from it linearly.
     lava::image storage_image(VK_FORMAT_R8G8B8A8_UNORM);
     // This does not have the sampled bit.
     storage_image.set_usage(VK_IMAGE_USAGE_STORAGE_BIT);
@@ -621,6 +644,7 @@ auto main() -> int {
                     current_entity.origin_z + current_sprite.offset_z, j);
             }
         }
+        p_pixel_buffer_data->point_lights[0].position = cubes[1].get_origin();
 
         void* p_data;
         vkMapMemory(app.device->get(),
