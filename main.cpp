@@ -47,9 +47,10 @@ uint32_t view_height = 300u;
 // TODO: Figure out struct packing and half precision floats across C++ and
 // Slang.
 struct Pixel {
+    // <X, Y, Z>
     alignas(16) std::array<float, 3> normal;
-    alignas(4) float alpha;
-    alignas(4) int32_t depth;
+    // <Y, Z>
+    alignas(8) std::array<int32_t, 2> depth;
     alignas(4) uint32_t palette_index;
 };
 
@@ -63,10 +64,10 @@ struct PixelBucket {
         // TODO: Make this a ring buffer instead of saturated buffer.
         if (this->size < 8) [[likely]] {
             // Don't push pixels beyond a clipping plane.
-            if (pixel.depth > -sqrt(300 * 300 + 300 * 300)) [[likely]] {
-                this->pixels[this->size] = pixel;
-                this->size++;
-            }
+            // if (pixel.depth > -sqrt(300 * 300 + 300 * 300)) [[likely]] {
+            this->pixels[this->size] = pixel;
+            this->size++;
+            // }
         }
     }
 };
@@ -103,10 +104,10 @@ struct SpriteAtlas {
                     (atlas_index * sprite_width * sprite_height) +
                     j * sprite_width + i;
                 pixels[pixel_index].normal = {0.f, 1.f, 0.f};
-                pixels[pixel_index].palette_index = 31u;
+                pixels[pixel_index].palette_index = 30u;
                 // Depth increases from 0 to 20 backwards along the top
                 // face.
-                pixels[pixel_index].depth = j;
+                pixels[pixel_index].depth[1] = j;
             }
         }
     }
@@ -121,7 +122,7 @@ struct SpriteAtlas {
                 pixels[pixel_index].palette_index = 30u;
                 // Depth increases from 0 to 20 downward along the front
                 // face.
-                pixels[pixel_index].depth = -j;
+                pixels[pixel_index].depth[0] = -j;
             }
         }
     }
@@ -156,7 +157,7 @@ struct GpuPixelBuffer {
                                                        .pixel_buckets[j][i]
                                                        .pixels[k];
                             current_pixel.palette_index = 0;
-                            current_pixel.depth = 0;
+                            current_pixel.depth = {0, 0};
                         }
                     }
                 }
@@ -191,11 +192,13 @@ struct GpuPixelBuffer {
                                               [view_x - cell_x * 4];
                 current_pixel_bucket.push(Pixel{
                     .normal = current_pixel.normal,
-                    .depth = current_pixel.depth
-                             // Y depth offset (along ground).
-                             - world_y
-                             // Z depth offset (skyward).
-                             - world_z,
+                    .depth =
+                        {
+                            // Y depth offset (skyward).
+                            current_pixel.depth[0] - world_y,
+                            // Z depth offset (forward).
+                            current_pixel.depth[1] - world_z,
+                        },
                     .palette_index = current_pixel.palette_index,
                 });
             }
@@ -213,7 +216,7 @@ auto main() -> int {
         for (int32_t i = 0; i < p_sprite_atlas->sprite_width; i++) {
             p_sprite_atlas->pixels[i + j * p_sprite_atlas->sprite_width] =
                 Pixel{
-                    .depth = 0,
+                    .depth = {0, 0},
                     .palette_index = 0,
                 };
         }
