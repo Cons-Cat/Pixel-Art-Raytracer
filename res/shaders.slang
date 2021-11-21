@@ -8,6 +8,16 @@ RWTexture2D<float4> uav;
 [vk::binding(1, 0)]
 RWStructuredBuffer<GpuPixelBuffer> gpu_buffer;
 
+// TODO: Is there any way to make a combined RWSampler2D work?
+[vk::binding(2, 0)]
+RWSampler2D sampler;
+
+[vk::binding(3, 0)]
+cbuffer WinSize {
+    uint32_t win_width;
+	uint32_t win_height;
+}
+
 // TODO: Assess performance characteristics
 //       https://developer.nvidia.com/content/understanding-structured-buffer-performance
 struct Pixel {
@@ -215,10 +225,14 @@ VertexStageOutput vertex_main(uint vertex_id : SV_VertexID) {
     return VertexStageOutput(sv_position);
 }
 
-[shader("fragment")] float4
-fragment_main(VertexStageOutput vertex,
-              float4 pixel_coord : SV_Position) : SV_Target {
+[shader("fragment")]
+float4 fragment_main(VertexStageOutput vertex,
+                     float4 pixel_coord : SV_Position) : SV_Target {
     float4 color;
-    color = uav.Load(pixel_coord.xy);
+	// TODO: Make the sampler work.
+    // color = uav.Sample(sampler, pixel_coord.xy);	
+	// TODO: Divide by window width and height.
+    color = uav.Load(float2(pixel_coord.x * 480 / win_width,
+	                        pixel_coord.y * 300 / win_height));
     return color;
 }

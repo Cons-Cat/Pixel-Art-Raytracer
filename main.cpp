@@ -294,6 +294,7 @@ auto main() -> int {
     };
     app.manager.on_create_param = [&](lava::device::create_param& param) {
         param.next = &features;
+        param.has_features_2 = true;
         param.extensions.insert(param.extensions.end(),
                                 {
                                     "VK_KHR_shader_float16_int8",
@@ -330,19 +331,22 @@ auto main() -> int {
 
     lava::descriptor::ptr shared_descriptor_layout;
     lava::descriptor::pool::ptr descriptor_pool;
-    VkDescriptorSet p_shared_descriptor_set_image = nullptr;
-    VkDescriptorSet p_shared_descriptor_set_pixels = nullptr;
+    VkDescriptorSet p_shared_descriptor_set = nullptr;
 
     // Our Oklab color conversions already give us sRGB colors, so we want to
     // sample from it linearly.
     lava::image storage_image(VK_FORMAT_R8G8B8A8_UNORM);
     // This does not have the sampled bit.
     storage_image.set_usage(VK_IMAGE_USAGE_STORAGE_BIT);
+    VkSampler p_texture_sampler;
 
     // Staging buffer is host-writable.
     lava::buffer::ptr pixel_buffer_staging;
     // Device buffer is device-visible.
     lava::buffer::ptr pixel_buffer_device;
+
+    // Window surface size.
+    lava::buffer::ptr window_buffer_uniform;
 
     auto fn_cmd_transfer_pixel_buffer_memory = [&](VkCommandBuffer p_cmd_buf) {
         VkBufferCopy copy = {
@@ -366,8 +370,10 @@ auto main() -> int {
         descriptor_pool = lava::make_descriptor_pool();
         descriptor_pool->create(app.device,
                                 {{VK_DESCRIPTOR_TYPE_STORAGE_IMAGE, 1},
+                                 {VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, 1},
+                                 {VK_DESCRIPTOR_TYPE_SAMPLER, 1},
                                  {VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, 1}},
-                                2);
+                                4);
 
         app.device->vkCreateCommandPool(app.device->graphics_queue().family,
                                         &p_cmd_pool);
@@ -379,6 +385,10 @@ auto main() -> int {
             VK_SHADER_STAGE_FRAGMENT_BIT | VK_SHADER_STAGE_COMPUTE_BIT);
         shared_descriptor_layout->add_binding(
             1, VK_DESCRIPTOR_TYPE_STORAGE_BUFFER, VK_SHADER_STAGE_COMPUTE_BIT);
+        shared_descriptor_layout->add_binding(2, VK_DESCRIPTOR_TYPE_SAMPLER,
+                                              VK_SHADER_STAGE_FRAGMENT_BIT);
+        shared_descriptor_layout->add_binding(
+            3, VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER, VK_SHADER_STAGE_FRAGMENT_BIT);
         shared_descriptor_layout->create(app.device);
 
         storage_image.create(app.device, {view_width, view_height});
@@ -423,12 +433,40 @@ auto main() -> int {
             .imageLayout = VK_IMAGE_LAYOUT_GENERAL,
         };
 
+        VkSamplerCreateInfo sampler_create_info{
+            .sType = VK_STRUCTURE_TYPE_SAMPLER_CREATE_INFO,
+            .magFilter = VK_FILTER_NEAREST,
+            .minFilter = VK_FILTER_NEAREST,
+            .addressModeU = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+            .addressModeV = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+            .addressModeW = VK_SAMPLER_ADDRESS_MODE_CLAMP_TO_BORDER,
+            .anisotropyEnable = VK_FALSE,
+            .compareEnable = VK_FALSE,
+            .compareOp = VK_COMPARE_OP_ALWAYS,
+            .borderColor = VK_BORDER_COLOR_INT_OPAQUE_BLACK,
+            .unnormalizedCoordinates = VK_FALSE,
+        };
+        vkCreateSampler(app.device->get(), &sampler_create_info, nullptr,
+                        &p_texture_sampler);
+        VkDescriptorImageInfo sampler_info = {
+            .sampler = p_texture_sampler,
+        };
+
+        // TODO: Remove this uniform to send window size to device.
+        window_buffer_uniform = lava::make_buffer();
+        lava::uv2 win_size = app.window.get_size();
+        window_buffer_uniform->create(app.device, &win_size, sizeof(win_size),
+                                      VK_BUFFER_USAGE_TRANSFER_DST_BIT |
+                                          VK_BUFFER_USAGE_UNIFORM_BUFFER_BIT,
+                                      // TODO: Staging buffer.
+                                      true, VMA_MEMORY_USAGE_CPU_TO_GPU);
+
         // Create the descriptor sets.
-        p_shared_descriptor_set_image =
+        p_shared_descriptor_set =
             shared_descriptor_layout->allocate(descriptor_pool->get());
         VkWriteDescriptorSet const write_desc_storage_image{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = p_shared_descriptor_set_image,
+            .dstSet = p_shared_descriptor_set,
             .dstBinding = 0,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_IMAGE,
@@ -436,16 +474,34 @@ auto main() -> int {
         };
         VkWriteDescriptorSet const write_desc_storage_pixels{
             .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
-            .dstSet = p_shared_descriptor_set_image,
+            .dstSet = p_shared_descriptor_set,
             .dstBinding = 1,
             .descriptorCount = 1,
             .descriptorType = VK_DESCRIPTOR_TYPE_STORAGE_BUFFER,
             .pBufferInfo = pixel_buffer_device->get_descriptor_info(),
         };
+        VkWriteDescriptorSet const write_desc_sampler{
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = p_shared_descriptor_set,
+            .dstBinding = 2,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_SAMPLER,
+            .pImageInfo = &sampler_info,
+        };
+        VkWriteDescriptorSet const write_win_size{
+            .sType = VK_STRUCTURE_TYPE_WRITE_DESCRIPTOR_SET,
+            .dstSet = p_shared_descriptor_set,
+            .dstBinding = 3,
+            .descriptorCount = 1,
+            .descriptorType = VK_DESCRIPTOR_TYPE_UNIFORM_BUFFER,
+            .pBufferInfo = window_buffer_uniform->get_descriptor_info(),
+        };
 
         app.device->vkUpdateDescriptorSets({
             write_desc_storage_image,
             write_desc_storage_pixels,
+            write_desc_sampler,
+            write_win_size,
         });
 
         // Create compute pipeline.
@@ -504,8 +560,7 @@ auto main() -> int {
 
         // Hard-code draw of three verts.
         raster_pipeline->on_process = [&](VkCommandBuffer p_cmd_buf) {
-            raster_pipeline_layout->bind(p_cmd_buf,
-                                         p_shared_descriptor_set_image);
+            raster_pipeline_layout->bind(p_cmd_buf, p_shared_descriptor_set);
             app.device->call().vkCmdDraw(p_cmd_buf, 3, 1, 0, 0);
         };
         return true;
@@ -532,17 +587,17 @@ auto main() -> int {
         if (render_mode == COLOR) {
             compute_pipeline->bind(p_cmd_buf);
             compute_pipeline_layout->bind_descriptor_set(
-                p_cmd_buf, p_shared_descriptor_set_image, 0, {},
+                p_cmd_buf, p_shared_descriptor_set, 0, {},
                 VK_PIPELINE_BIND_POINT_COMPUTE);
         } else if (render_mode == DEPTH) {
             depth_pipeline->bind(p_cmd_buf);
             depth_pipeline_layout->bind_descriptor_set(
-                p_cmd_buf, p_shared_descriptor_set_image, 0, {},
+                p_cmd_buf, p_shared_descriptor_set, 0, {},
                 VK_PIPELINE_BIND_POINT_COMPUTE);
         } else if (render_mode == NORMALS) {
             normals_pipeline->bind(p_cmd_buf);
             normals_pipeline_layout->bind_descriptor_set(
-                p_cmd_buf, p_shared_descriptor_set_image, 0, {},
+                p_cmd_buf, p_shared_descriptor_set, 0, {},
                 VK_PIPELINE_BIND_POINT_COMPUTE);
         }
 
