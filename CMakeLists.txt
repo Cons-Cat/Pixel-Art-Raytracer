@@ -12,3 +12,13 @@ target_compile_definitions(sorting PRIVATE Release=$<CONFIG:Release>)
 target_link_libraries(sorting PRIVATE lava::app)
 target_sources(sorting PRIVATE
   src/shared_behavior.hpp)
+
+project(reference)
+add_executable(reference src/reference.cpp)
+if(WIN32)
+  target_compile_definitions(reference PRIVATE WIN32)
+endif()
+target_compile_definitions(reference PRIVATE Release=$<CONFIG:Release>)
+target_link_libraries(reference PRIVATE lava::app)
+target_sources(reference PRIVATE
+  src/shared_behavior.hpp)
