@@ -77,6 +77,8 @@ auto main(int argc, char* argv[]) -> int {
         raster_pipeline->set_layout(raster_pipeline_layout);
         raster_pipeline->set_auto_size(true);
 
+        image.create(app.device, {view_width, view_height});
+
         VkImageViewCreateInfo view_info{
             .sType = VK_STRUCTURE_TYPE_IMAGE_VIEW_CREATE_INFO,
             .image = image.get(),
