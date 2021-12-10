@@ -17,7 +17,6 @@ struct PixelBucket {
 
     // TODO: r-value reference?
     void push(Pixel pixel) {
-        // TODO: Make this a ring buffer instead of saturated buffer.
         if (this->size < 8) [[likely]] {
             // Don't push pixels beyond a clipping plane.
             // if (pixel.depth > -sqrt(300 * 300 + 300 * 300)) [[likely]] {
