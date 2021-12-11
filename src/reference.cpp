@@ -1,4 +1,5 @@
 #include "shared_behavior.hpp"
+#include "vulkan/vulkan_core.h"
 
 struct Vertex {
     alignas(8) std::array<int32_t, 2> position;
@@ -9,12 +10,12 @@ struct Vertex {
 
 struct Quad {
     // TODO: Tilt this 45d along x-axis.
-    Vertex verts[4] = {{{0, 0}, {0, 0}},
-                       {{20, 0}, {20, 0}},
-                       {{0, 20}, {0, 20}},
-                       {{20, 20}, {20, 20}}};
+    std::vector<Vertex> vertices = {{{0, 0}, {0, 0}},
+                                    {{20, 0}, {20, 0}},
+                                    {{0, 20}, {0, 20}},
+                                    {{20, 20}, {20, 20}}};
     // Clockwise winding order.
-    int32_t indices[6] = {0, 1, 3, 3, 2, 0};
+    std::vector<int32_t> indices = {0, 1, 3, 3, 2, 0};
 };
 
 struct Pixel {
@@ -61,9 +62,39 @@ struct Entity {
         std::array<int32_t, 3> sprite_offset;
         std::array<int32_t, 2> texture_offset;
     };
-    Sprite sprites[2];  // This is hard-coded for cubes ..
+    int32_t sprites_count;
+    Sprite* sprites;  // This is hard-coded for cubes ..
     std::array<int32_t, 3> position;
+
+    void push(std::vector<Vertex>& vertex_buffer,
+              std::vector<int32_t>& index_buffer) {
+        Quad mesh;
+        vertex_buffer.insert(vertex_buffer.end(), mesh.vertices.begin(),
+                             mesh.vertices.end());
+        index_buffer.insert(index_buffer.end(), mesh.indices.begin(),
+                            mesh.indices.end());
+    }
 };
+
+auto initialize_universe() -> Entity* {
+    // Initialize cubes.
+    Entity* p_cubes = new (std::nothrow) Entity[8];
+    for (int32_t i = 0; i < 8; i++) {
+        int32_t rand_x = rand() % (480 - 20);
+        int32_t rand_y = (rand() % (300 - 40)) / 2;
+        int32_t rand_z = (rand() % (300 - 40)) / 2;
+        p_cubes[i].position = {rand_x, rand_y, rand_z};
+        p_cubes[i].sprites_count = 2;
+        p_cubes[i].sprites =
+            new (std::nothrow) Entity::Sprite[p_cubes[i].sprites_count]{
+                {// Top face of a cube.
+                 .sprite_offset = {0, -20, 0}},
+                {// Front face of a cube.
+                 {0, 0, 0}},
+            };
+    }
+    return p_cubes;
+}
 
 auto main(int argc, char* argv[]) -> int {
     std::cout << "Hello, user!\n";
@@ -89,6 +120,11 @@ auto main(int argc, char* argv[]) -> int {
     // TODO: Stage this buffer.
     lava::buffer::ptr vertex_buffer;
     lava::buffer::ptr index_buffer;
+
+    Entity* p_entities = initialize_universe();
+    SpriteAtlas* p_sprite_atlas;
+    p_sprite_atlas->make_cube_top(0, 0);
+    p_sprite_atlas->make_cube_front(0, 20);
 
     app.on_create = [&]() {
         descriptor_pool = lava::make_descriptor_pool();
@@ -135,6 +171,18 @@ auto main(int argc, char* argv[]) -> int {
         raster_pipeline_layout->create(app.device);
         raster_pipeline->set_layout(raster_pipeline_layout);
         raster_pipeline->set_auto_size(true);
+
+        std::vector<Vertex> entity_vertices;
+        std::vector<int32_t> entity_indices;
+        for (int i = 0; i < p_entities->sprites_count; i++) {
+            p_entities[i].push(entity_vertices, entity_indices);
+        }
+        vertex_buffer->create(app.device, entity_vertices.data(),
+                              sizeof(Vertex) * entity_vertices.size(),
+                              VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
+        vertex_buffer->create(app.device, entity_indices.data(),
+                              sizeof(int32_t) * entity_indices.size(),
+                              VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
 
         image.create(app.device, {view_width, view_height});
 
