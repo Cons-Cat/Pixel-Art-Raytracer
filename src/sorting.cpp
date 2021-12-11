@@ -10,6 +10,114 @@ struct Pixel {
     alignas(4) uint32_t palette_index;
 };
 
+struct SpriteAtlas {
+    static constexpr int32_t sprites_count = 2;
+    static constexpr int32_t sprite_width = 20;
+    static constexpr int32_t sprite_height = 20;
+    Pixel pixels[sprites_count * sprite_width * sprite_height];
+
+    // All sprites are drawn from their top-left, incrementing horizontally
+    // across, and then vertically across.
+    void make_cube_top(int32_t atlas_index) {
+        for (int32_t j = 0; j < sprite_height; j++) {
+            for (int32_t i = 0; i < sprite_width; i++) {
+                int32_t const pixel_index =
+                    (atlas_index * sprite_width * sprite_height) +
+                    j * sprite_width + i;
+                pixels[pixel_index].normal = {0.f, 1.f, 0.f};
+                pixels[pixel_index].palette_index = 30u;
+                // Depth increases from 0 to 20 backwards along the top
+                // face.
+                pixels[pixel_index].depth[1] = j;
+            }
+        }
+    }
+
+    void make_cube_front(int32_t atlas_index) {
+        for (int32_t j = 0; j < sprite_height; j++) {
+            for (int32_t i = 0; i < sprite_width; i++) {
+                int32_t const pixel_index =
+                    (atlas_index * sprite_width * sprite_height) +
+                    j * sprite_width + i;
+                pixels[pixel_index].normal = {0.f, 0.f, 1.f};
+                pixels[pixel_index].palette_index = 30u;
+                // Depth increases from 0 to 20 downward along the front
+                // face.
+                pixels[pixel_index].depth[0] = -j;
+            }
+        }
+    }
+};
+
+template <typename Pixel>
+auto initialize_sprite_atlas() -> SpriteAtlas<Pixel>* {
+    SpriteAtlas<Pixel>* p_sprite_atlas =
+        new (std::nothrow) SpriteAtlas<Pixel>();
+    for (int32_t j = 0; j < p_sprite_atlas->sprite_height; j++) {
+        for (int32_t i = 0; i < p_sprite_atlas->sprite_width; i++) {
+            p_sprite_atlas->pixels[i + j * p_sprite_atlas->sprite_width] =
+                Pixel{
+                    .depth = {0, 0},
+                    .palette_index = 0,
+                };
+        }
+    }
+    p_sprite_atlas->make_cube_front(0);
+    p_sprite_atlas->make_cube_top(1);
+    return p_sprite_atlas;
+}
+
+struct Sprite {
+    // All sprites are 20x20.
+    int32_t atlas_index;
+    // Sprites have an [x,y,z] offset from the origin of an entity.
+    int32_t offset_x, offset_y, offset_z;
+};
+
+struct Entity {
+    // Origin point of this entity.
+    int32_t origin_x, origin_y, origin_z;
+    int32_t sprites_count = 0;
+    Sprite* sprites;
+
+    auto get_origin() -> std::array<int32_t, 3> {
+        return {origin_x, origin_y, origin_z};
+    }
+};
+
+auto initialize_universe() -> Entity* {
+    // Initialize cubes.
+    Entity* p_cubes = new (std::nothrow) Entity[8];
+    for (int32_t i = 0; i < 8; i++) {
+        int32_t rand_x = rand() % (480 - 20);
+        int32_t rand_y = rand() % (300 - 40);
+        p_cubes[i].origin_x = rand_x;
+        p_cubes[i].origin_y = rand_y;
+        p_cubes[i].origin_z = 0;
+        p_cubes[i].sprites_count = 2;
+        p_cubes[i].sprites =
+            new (std::nothrow) Sprite[p_cubes[i].sprites_count]{
+                // Cubes have an origin at their top edge, on their front-left
+                // corner.
+                Sprite{
+                    // Top face of a cube.
+                    .atlas_index = 0,
+                    .offset_x = 0,
+                    .offset_y = -20,
+                    .offset_z = 0,
+                },
+                Sprite{
+                    // Front face of a cube.
+                    .atlas_index = 1,
+                    .offset_x = 0,
+                    .offset_y = 0,
+                    .offset_z = 0,
+                },
+            };
+    }
+    return p_cubes;
+}
+
 struct PixelBucket {
     // Size is a positive value, but it is signed to enable optimizations.
     alignas(4) int32_t size = 0;
@@ -17,6 +125,7 @@ struct PixelBucket {
 
     // TODO: r-value reference?
     void push(Pixel pixel) {
+        // TODO: Make this a ring buffer instead of saturated buffer.
         if (this->size < 8) [[likely]] {
             // Don't push pixels beyond a clipping plane.
             // if (pixel.depth > -sqrt(300 * 300 + 300 * 300)) [[likely]] {

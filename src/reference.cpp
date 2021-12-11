@@ -2,10 +2,68 @@
 
 struct Vertex {
     alignas(8) std::array<int32_t, 2> position;
+    // This is a pixel offset into the sprite atlas, which is normalized in the
+    // shader.
     alignas(8) std::array<float, 2> uv;
 };
 
-struct GpuSpriteBuffer {};
+struct Quad {
+    // TODO: Tilt this 45d along x-axis.
+    Vertex verts[4] = {{{0, 0}, {0, 0}},
+                       {{20, 0}, {20, 0}},
+                       {{0, 20}, {0, 20}},
+                       {{20, 20}, {20, 20}}};
+    // Clockwise winding order.
+    int32_t indices[6] = {0, 1, 3, 3, 2, 0};
+};
+
+struct Pixel {
+    // <X, Y, Z>
+    alignas(16) std::array<float, 3> color;
+};
+
+struct SpriteAtlas {
+    static constexpr int32_t sprite_width = 20;
+    static constexpr int32_t sprite_height = 20;
+    static constexpr int32_t sheet_width = 2;
+    static constexpr int32_t sheet_height = 2;
+    Pixel pixels[sprite_width * sheet_width * 2][sprite_height * sheet_height];
+
+    void make_cube_top(int32_t x, int32_t y) {
+        for (int i = 0; i < sprite_width; i++) {
+            for (int j = 0; j < sprite_height; j++) {
+                // Normal faces +Y.
+                pixels[x + i][y + j] = {0.f, 1.f, 0.f};
+                // This is Oklab color space.
+                pixels[x + i + sprite_width][y + j] = {0.8222894889915049,
+                                                       -0.027784464472867976,
+                                                       0.06851569391191548};
+            }
+        }
+    }
+
+    void make_cube_front(int32_t x, int32_t y) {
+        for (int i = 0; i < sprite_width; i++) {
+            for (int j = 0; j < sprite_height; j++) {
+                // Normal faces +Z.
+                pixels[x + i][y + j] = {0.f, 0.f, 1.f};
+                // This is Oklab color space.
+                pixels[x + i + sprite_width][y + j] = {0.8222894889915049,
+                                                       -0.027784464472867976,
+                                                       0.06851569391191548};
+            }
+        }
+    }
+};
+
+struct Entity {
+    using Sprite = struct {
+        std::array<int32_t, 3> sprite_offset;
+        std::array<int32_t, 2> texture_offset;
+    };
+    Sprite sprites[2];  // This is hard-coded for cubes ..
+    std::array<int32_t, 3> position;
+};
 
 auto main(int argc, char* argv[]) -> int {
     std::cout << "Hello, user!\n";
@@ -30,6 +88,7 @@ auto main(int argc, char* argv[]) -> int {
 
     // TODO: Stage this buffer.
     lava::buffer::ptr vertex_buffer;
+    lava::buffer::ptr index_buffer;
 
     app.on_create = [&]() {
         descriptor_pool = lava::make_descriptor_pool();
