@@ -50,9 +50,8 @@ struct SpriteAtlas {
 };
 
 template <typename Pixel>
-auto initialize_sprite_atlas() -> SpriteAtlas<Pixel>* {
-    SpriteAtlas<Pixel>* p_sprite_atlas =
-        new (std::nothrow) SpriteAtlas<Pixel>();
+auto initialize_sprite_atlas() -> SpriteAtlas* {
+    SpriteAtlas* p_sprite_atlas = new (std::nothrow) SpriteAtlas();
     for (int32_t j = 0; j < p_sprite_atlas->sprite_height; j++) {
         for (int32_t i = 0; i < p_sprite_atlas->sprite_width; i++) {
             p_sprite_atlas->pixels[i + j * p_sprite_atlas->sprite_width] =
@@ -168,7 +167,7 @@ struct GpuPixelBuffer {
         }
     }
 
-    void draw_sprite(SpriteAtlas<Pixel> const* p_sprite_atlas, int32_t world_x,
+    void draw_sprite(SpriteAtlas const* p_sprite_atlas, int32_t world_x,
                      int32_t world_y, int32_t world_z, int32_t atlas_index) {
         for (int32_t j = 0; j < p_sprite_atlas->sprite_height; j++) {
             for (int32_t i = 0; i < p_sprite_atlas->sprite_width; i++) {
@@ -213,7 +212,7 @@ struct GpuPixelBuffer {
 auto main() -> int {
     std::cout << "Hello, user!\n";
 
-    SpriteAtlas<Pixel>* p_sprite_atlas = initialize_sprite_atlas<Pixel>();
+    SpriteAtlas* p_sprite_atlas = initialize_sprite_atlas<Pixel>();
 
     GpuPixelBuffer* p_pixel_buffer_data = new (std::nothrow) GpuPixelBuffer();
     p_pixel_buffer_data->clear();
