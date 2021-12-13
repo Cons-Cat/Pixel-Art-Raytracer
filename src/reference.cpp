@@ -81,16 +81,18 @@ auto initialize_universe() -> Entity* {
     Entity* p_cubes = new (std::nothrow) Entity[8];
     for (int32_t i = 0; i < 8; i++) {
         int32_t rand_x = rand() % (480 - 20);
-        int32_t rand_y = (rand() % (300 - 40)) / 2;
-        int32_t rand_z = (rand() % (300 - 40)) / 2;
+        int32_t rand_y = rand() % 60;
+        int32_t rand_z = (rand() % (300 - 40));
         p_cubes[i].position = {rand_x, rand_y, rand_z};
         p_cubes[i].sprites_count = 2;
         p_cubes[i].sprites =
             new (std::nothrow) Entity::Sprite[p_cubes[i].sprites_count]{
                 {// Top face of a cube.
-                 .sprite_offset = {0, -20, 0}},
+                 .sprite_offset = {{0, -20, -20}},
+                 .texture_offset = {{0, 0}}},
                 {// Front face of a cube.
-                 {0, 0, 0}},
+                 .sprite_offset = {{0, 0, 0}},
+                 .texture_offset = {{0, 20}}},
             };
     }
     return p_cubes;
@@ -180,9 +182,9 @@ auto main(int argc, char* argv[]) -> int {
         vertex_buffer->create(app.device, entity_vertices.data(),
                               sizeof(Vertex) * entity_vertices.size(),
                               VK_BUFFER_USAGE_VERTEX_BUFFER_BIT);
-        vertex_buffer->create(app.device, entity_indices.data(),
-                              sizeof(int32_t) * entity_indices.size(),
-                              VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
+        index_buffer->create(app.device, entity_indices.data(),
+                             sizeof(int32_t) * entity_indices.size(),
+                             VK_BUFFER_USAGE_INDEX_BUFFER_BIT);
 
         image.create(app.device, {view_width, view_height});
 
@@ -238,6 +240,20 @@ auto main(int argc, char* argv[]) -> int {
         raster_pipeline->create(render_pass->get());
         render_pass->add_front(raster_pipeline);
 
+        raster_pipeline->on_process = [&](VkCommandBuffer p_cmd_buf) {
+            raster_pipeline_layout->bind(p_cmd_buf, p_descriptor_set);
+
+            vkCmdBindIndexBuffer(p_cmd_buf, index_buffer->get(), 0,
+                                 VK_INDEX_TYPE_UINT32);
+            std::array<VkBuffer, 1> const vert_buffer_data = {
+                vertex_buffer->get()};
+            vkCmdBindVertexBuffers(p_cmd_buf, 0, 1, vert_buffer_data.data(), 0);
+        };
+
+        return true;
+    };
+
+    app.on_update = [&](lava::delta dt) {
         return true;
     };
 
