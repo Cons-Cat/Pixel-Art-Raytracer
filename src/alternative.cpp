@@ -1,5 +1,7 @@
 #include <liblava/lava.hpp>
 
+#include <iostream>
+
 struct Entity {
     std::array<int32_t, 3> position;
     std::array<float, 3> color_oklab;
@@ -7,11 +9,11 @@ struct Entity {
 
 // This occupies exactly three cache-lines on x64.
 struct Bounds {
-    int16_t x, y, z, width, height, length;
+    POS_TYPE x, y, z, width, height, length;
 };
 
 struct Point {
-    int16_t x, y, z;
+    POS_TYPE x, y, z;
 };
 
 auto get_min_point(Point p1, Point p2) -> Point {
@@ -35,8 +37,6 @@ struct alignas(16) AABB {
     Point max_point;
     // int32_t const padding = 0;  // This pads out an AABB to 16 bytes.
 
-    // AABB() = default;
-
     auto get_center() -> Point {
         // TODO: Remove these casts.
         return Point{
@@ -56,7 +56,7 @@ struct alignas(16) AABB {
         this->max_point = get_max_point(this->max_point, box.max_point);
     }
 };
-static_assert(sizeof(AABB) == 16);
+// static_assert(sizeof(AABB) == 16);
 
 auto make_aabb_from_entity(Entity const& entity) -> AABB {
     return AABB{
@@ -199,7 +199,8 @@ auto build_bvh(std::vector<Entity> primitives) -> BVH {
 
 auto main() -> int {
     std::vector<Entity> entities;
-    for (int i = 0; i < 128 * 100; i++) {
+    entities.reserve(128 * 100);
+    for (int i = 0; i < entities.capacity(); i++) {
         entities.emplace_back();
     }
 

@@ -25,12 +25,24 @@ target_link_libraries(reference PRIVATE lava::app)
 target_sources(reference PRIVATE
   src/shared_behavior.hpp)
 
-project(alternative)
-add_executable(alternative src/alternative.cpp)
+project(alternative_short)
+add_executable( alternative_short src/alternative.cpp)
 if(WIN32)
-  target_compile_definitions(alternative PRIVATE WIN32)
+  target_compile_definitions(alternative_short PRIVATE WIN32)
 endif()
-target_compile_definitions(alternative PRIVATE Release=$<CONFIG:Release>)
-target_link_libraries(alternative PRIVATE lava::app)
-target_sources(alternative PRIVATE
+target_compile_definitions(alternative_short PRIVATE Release=$<CONFIG:Release>)
+target_link_libraries(alternative_short PRIVATE lava::app)
+target_compile_definitions(alternative_short PUBLIC POS_TYPE=int16_t)
+target_sources(alternative_short PRIVATE
+  src/shared_behavior.hpp)
+
+project(alternative_int)
+add_executable(alternative_int src/alternative.cpp)
+if(WIN32)
+  target_compile_definitions(alternative_int PRIVATE WIN32)
+endif()
+target_compile_definitions(alternative_int PRIVATE Release=$<CONFIG:Release>)
+target_link_libraries(alternative_int PRIVATE lava::app)
+target_compile_definitions(alternative_int PUBLIC POS_TYPE=int32_t)
+target_sources(alternative_int PRIVATE
   src/shared_behavior.hpp)
