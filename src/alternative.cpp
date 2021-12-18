@@ -201,7 +201,7 @@ auto main() -> int {
     std::vector<Entity> entities;
     entities.reserve(128 * 100);
     for (int i = 0; i < entities.capacity(); i++) {
-        entities.emplace_back();
+        entities.emplace_back(std::array<int32_t, 3>{rand(), rand(), rand()});
     }
 
     BVH bvh = build_bvh(entities);
