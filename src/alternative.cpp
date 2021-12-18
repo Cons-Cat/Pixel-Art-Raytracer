@@ -91,8 +91,11 @@ struct BVH {
     Entity const* entities;
     uint32_t const entity_count;
 
-    BVH(std::vector<TreeNode>&& in_nodes, std::vector<Entity> in_primitives)
-        : nodes(in_nodes), entities(in_entities){};
+    BVH(std::vector<TreeNode>&& in_nodes, Entity const* p_in_primitives,
+        uint32_t entity_count)
+        : nodes(in_nodes),
+          entities(p_in_primitives),
+          entity_count(entity_count){};
 };
 
 struct BuildEntry {
@@ -191,12 +194,18 @@ auto build_bvh(std::vector<Entity> primitives) -> BVH {
         nodes[n] = build_nodes[n];
     }
 
-    return BVH(std::move(nodes), primitives);
+    return BVH(std::move(nodes), primitives.data(), primitives.size());
 }
 
 auto main() -> int {
     std::vector<Entity> entities;
+    for (int i = 0; i < 128 * 100; i++) {
+        entities.emplace_back();
+    }
+
     BVH bvh = build_bvh(entities);
+    // Prevent optimizing it out:
+    asm volatile("" ::"m"(bvh));
 }
 
 /* Create an entity.
