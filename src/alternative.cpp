@@ -8,6 +8,12 @@ struct Point {
     Int x, y, z;
 };
 
+struct Ray {
+    Point<int16_t> origin;
+    Point<int16_t> direction;
+    Point<int16_t> direction_inverse;
+};
+
 struct alignas(16) AABB {
     Point<int16_t> min_point;
     Point<int16_t> max_point;
@@ -89,8 +95,8 @@ auto main() -> int {
     }
 
     // Determine how many entities fit into each entity bin.
-    int8_t entity_bins_counts[cells_in_view_width][cells_in_view_height]
-                             [cells_in_view_length];
+    int8_t entity_count_in_bin[cells_in_view_width][cells_in_view_height]
+                              [cells_in_view_length];
     int entities_in_view = 0;
     for (int i = 0; i < entities.size(); i++) {
         Entity& entity = entities[i];
@@ -103,21 +109,22 @@ auto main() -> int {
             int8_t x = static_cast<int8_t>(entity.position.x / cell_size);
             int8_t y = static_cast<int8_t>(entity.position.y / 2 / cell_size);
             int8_t z = static_cast<int8_t>(entity.position.z / 2 / cell_size);
-            entity_bins_counts[x][y][z] += 1;
+            entity_count_in_bin[x][y][z] += 1;
             entities_in_view += 1;
         }
     }
 
     // Determine the address offset of each entity bin.
-    int entity_bin_offsets[cells_in_view_width][cells_in_view_height]
-                          [cells_in_view_length];
+    int entity_bin_index_offset[cells_in_view_width][cells_in_view_height]
+                               [cells_in_view_length];
     int entity_offset_accumulator = 0;
     for (int x = 0; x < cells_in_view_width; x++) {
         for (int y = 0; y < cells_in_view_height; y++) {
             for (int z = 0; z < cells_in_view_length; z++) {
-                entity_bin_offsets[x][y][z] = entity_offset_accumulator *
-                                              static_cast<int>(sizeof(Entity));
-                entity_offset_accumulator += entity_bins_counts[x][y][z];
+                entity_bin_index_offset[x][y][z] =
+                    entity_offset_accumulator *
+                    static_cast<int>(sizeof(Entity));
+                entity_offset_accumulator += entity_count_in_bin[x][y][z];
             }
         }
     }
@@ -136,22 +143,56 @@ auto main() -> int {
 
             // Subtract entity_bins_counts, because it is used as an address
             // offset.
-            entity_bins_counts[x][y][z] -= 1;
+            entity_count_in_bin[x][y][z] -= 1;
             // Place this current entity into the bins at an address relative to
             // the offset of this <x,y,z> pair, plus an offset which approaches
             // `0`.
-            p_entity_bins[entity_bin_offsets[x][y][z] +
-                          entity_bins_counts[x][y][z]] = entities[i];
+            p_entity_bins[entity_bin_index_offset[x][y][z] +
+                          entity_count_in_bin[x][y][z]] = entities[i];
         }
     }
-
-    // TODO: Make spatial hash grid.
 
     // TODO: Make AABBs from entities.
 
     // TODO: Fit AABBs into grid bins.
 
-    // TODO: Trace 1 ray per pixel through spacial hash.
+    // TODO: Trace 1 ray per pixel through spatial hash.
+    Point<int16_t> ray_direction = {
+        .x = 0,
+        .y = -1,
+        .z = -1,
+    };
+
+    Pixel texture[view_width][view_height];
+    for (int16_t i = 0; i < view_width; i++) {
+        for (int16_t j = 1; j < view_height; j++) {
+            Ray ray{
+                .origin =
+                    {
+                        .x = i,
+                        .y = view_height,
+                        .z = 0,
+                    },
+                .direction = ray_direction,
+                // `.direction ./= 1`
+                .direction_inverse =
+                    {
+                        .x = 0,
+                        .y = -1,
+                        .z = -1,
+                    },
+            };
+            for (int16_t k = 0; k < j; k++) {
+                for (int ii = 0; ii < entity_count_in_bin[i][j][k]; ii++) {
+                    Entity& entity =
+                        p_entity_bins[entity_bin_index_offset[i][j][k] + ii];
+                    // Intersect ray with this entity.
+                }
+            }
+next_pixel:
+            continue;
+        }
+    }
 
     // TODO: Test intersection with ray for entities in a bin.
 
