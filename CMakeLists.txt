@@ -32,7 +32,6 @@ if(WIN32)
 endif()
 target_compile_definitions(alternative_short PRIVATE Release=$<CONFIG:Release>)
 target_link_libraries(alternative_short PRIVATE lava::app)
-target_compile_definitions(alternative_short PUBLIC POS_TYPE=int16_t)
 target_sources(alternative_short PRIVATE
   src/shared_behavior.hpp)
 
@@ -43,6 +42,5 @@ if(WIN32)
 endif()
 target_compile_definitions(alternative_int PRIVATE Release=$<CONFIG:Release>)
 target_link_libraries(alternative_int PRIVATE lava::app)
-target_compile_definitions(alternative_int PUBLIC POS_TYPE=int32_t)
 target_sources(alternative_int PRIVATE
   src/shared_behavior.hpp)

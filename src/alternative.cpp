@@ -1,212 +1,137 @@
 #include <liblava/lava.hpp>
 
 #include <iostream>
+#include <new>
 
-struct Entity {
-    std::array<int32_t, 3> position;
-    std::array<float, 3> color_oklab;
-};
-
-// This occupies exactly three cache-lines on x64.
-struct Bounds {
-    POS_TYPE x, y, z, width, height, length;
-};
-
+template <typename Int>
 struct Point {
-    POS_TYPE x, y, z;
+    Int x, y, z;
 };
-
-auto get_min_point(Point p1, Point p2) -> Point {
-    return Point{
-        std::min(p1.x, p2.x),
-        std::min(p1.y, p2.y),
-        std::min(p1.z, p2.z),
-    };
-}
-
-auto get_max_point(Point p1, Point p2) -> Point {
-    return Point{
-        std::max(p1.x, p2.x),
-        std::max(p1.y, p2.y),
-        std::max(p1.z, p2.z),
-    };
-}
 
 struct alignas(16) AABB {
-    Point min_point;
-    Point max_point;
-    // int32_t const padding = 0;  // This pads out an AABB to 16 bytes.
+    Point<int16_t> min_point;
+    Point<int16_t> max_point;
 
-    auto get_center() -> Point {
+    auto get_center() -> Point<int16_t> {
         // TODO: Remove these casts.
-        return Point{
+        return Point<int16_t>{
             .x = static_cast<int16_t>((min_point.x + max_point.x) / 2),
             .y = static_cast<int16_t>((min_point.y + max_point.y) / 2),
             .z = static_cast<int16_t>((min_point.z + max_point.z) / 2),
         };
     }
-
-    void expand_to_include_point(Point const& point) {
-        this->min_point = get_min_point(this->min_point, point);
-        this->max_point = get_max_point(this->max_point, point);
-    }
-
-    void expand_to_include_box(AABB const& box) {
-        this->min_point = get_min_point(this->min_point, box.min_point);
-        this->max_point = get_max_point(this->max_point, box.max_point);
-    }
 };
-// static_assert(sizeof(AABB) == 16);
+// Alignment pads this out from 12 bytes to 16.
+static_assert(sizeof(AABB) == 16);
+
+struct Entity {
+    Point<int32_t> position;
+    std::array<float, 3> color_oklab;
+};
 
 auto make_aabb_from_entity(Entity const& entity) -> AABB {
     return AABB{
         .min_point =
             {
-                static_cast<int16_t>(entity.position[0]),
-                static_cast<int16_t>(entity.position[1]),
-                static_cast<int16_t>(entity.position[2]),
+                static_cast<int16_t>(entity.position.x),
+                static_cast<int16_t>(entity.position.y),
+                static_cast<int16_t>(entity.position.z),
             },
         .max_point =
             {
-                static_cast<int16_t>(entity.position[0] + 20),
-                static_cast<int16_t>(entity.position[1] + 20),
-                static_cast<int16_t>(entity.position[2] + 20),
+                // TODO: Make dimensions variable.
+                static_cast<int16_t>(entity.position.x + 20),
+                static_cast<int16_t>(entity.position.y + 20),
+                static_cast<int16_t>(entity.position.z + 20),
             },
     };
 }
 
-struct TreeNode {
-    AABB box;
-    uint32_t start_index;
-    uint32_t right_node_offset;
-    uint32_t primitives_count;
-
-    auto is_leaf() -> bool {
-        return right_node_offset == 0;
-    }
-};
-
-struct BVH {
-    std::vector<TreeNode> nodes;
-    Entity const* entities;
-    uint32_t const entity_count;
-
-    BVH(std::vector<TreeNode>&& in_nodes, Entity const* p_in_primitives,
-        uint32_t entity_count)
-        : nodes(in_nodes),
-          entities(p_in_primitives),
-          entity_count(entity_count){};
-};
-
-struct BuildEntry {
-    uint32_t parent_index;
-    uint32_t start_index;
-    uint32_t end_index;  // TODO: This should only ever be 1.
-};
-
-struct BuildStack {
-    static constexpr uint32_t max_size = 128;
-    BuildEntry entries[max_size];
-    uint32_t stack_ptr = 0;
-
-    auto pop() -> BuildEntry {
-        stack_ptr--;
-        return entries[stack_ptr];
-    }
-
-    void push(BuildEntry const& entry) {
-        entries[stack_ptr] = entry;
-        stack_ptr++;
-    }
-
-    auto operator[](uint32_t index) -> BuildEntry& {
-        return entries[index];
-    }
-};
-
-auto build_bvh(std::vector<Entity> primitives) -> BVH {
-    BuildStack todo;
-
-    const uint32_t untouched = 0xffffffff;
-    const uint32_t touched_twice = 0xfffffffd;
-    uint32_t node_count = 0;
-
-    BuildEntry root{
-        .parent_index = 0xfffffffc,
-        .start_index = 0,
-        .end_index = static_cast<uint32_t>(primitives.size()),
-    };
-
-    todo.push(root);
-
-    TreeNode node{};
-    std::vector<TreeNode> build_nodes;
-    build_nodes.reserve(primitives.size() * 2);
-
-    while (todo.stack_ptr > 0) {
-        auto bnode = todo.pop();
-
-        uint32_t start_index = bnode.start_index;
-        uint32_t end_index = bnode.end_index;
-        uint32_t primitive_count = end_index - start_index;
-
-        node_count++;
-        node.start_index = start_index;
-        node.primitives_count = primitive_count;
-        node.right_node_offset = untouched;
-
-        // Calculate the bounding box for this node
-
-        auto bb = make_aabb_from_entity(primitives[start_index]);
-        auto bc = AABB{
-            .min_point = bb.get_center(),
-            .max_point = bb.get_center(),
-        };
-
-        for (uint32_t p = start_index + 1; p < end_index; ++p) {
-            auto box = make_aabb_from_entity(primitives[p]);
-            bb.expand_to_include_box(box);
-            bc.expand_to_include_point(box.get_center());
-        }
-
-        node.box = bb;
-
-        if (primitive_count <= 1) {
-            node.right_node_offset = 0;
-        }
-
-        build_nodes.push_back(node);
-
-        if (bnode.parent_index != 0xfffffffc) {
-            build_nodes[bnode.parent_index].right_node_offset--;
-            if (build_nodes[bnode.parent_index].right_node_offset ==
-                touched_twice) {
-                build_nodes[bnode.parent_index].right_node_offset =
-                    node_count - 1 - bnode.parent_index;
-            }
-        }
-    }
-
-    std::vector<TreeNode> nodes;
-    nodes.resize(node_count);
-
-    for (int n = 0; n < node_count; n++) {
-        nodes[n] = build_nodes[n];
-    }
-
-    return BVH(std::move(nodes), primitives.data(), primitives.size());
-}
+constexpr int8_t cell_size = 20;
+constexpr int32_t view_width = 480;
+constexpr int32_t view_height = 320;
+constexpr int8_t cells_in_view_width = view_width / cell_size;
+constexpr int8_t cells_in_view_height = view_width / cell_size;
+constexpr int8_t cells_in_view_length = view_width / cell_size;
 
 auto main() -> int {
     std::vector<Entity> entities;
-    entities.reserve(128 * 100);
+    entities.reserve(sizeof(Entity) * 128);
     for (int i = 0; i < entities.capacity(); i++) {
         entities.emplace_back(std::array<int32_t, 3>{rand(), rand(), rand()});
     }
 
-    BVH bvh = build_bvh(entities);
-    // Prevent optimizing it out:
-    asm volatile("" ::"m"(bvh));
+    // Determine how many entities fit into each entity bin.
+    int8_t entity_bins_counts[cells_in_view_width][cells_in_view_height]
+                             [cells_in_view_length];
+    int entities_in_view = 0;
+    for (int i = 0; i < entities.size(); i++) {
+        Entity& entity = entities[i];
+        // If this entity is inside the view bounds.
+        // TODO: Consider entity's dimensions.
+        if (!(entity.position.x < 0) || !(entity.position.x > view_width) ||
+            !(entity.position.y < 0) ||
+            !(entity.position.y > view_height / 2) ||
+            !(entity.position.z < 0) || !(entity.position.z > view_height)) {
+            int8_t x = static_cast<int8_t>(entity.position.x / cell_size);
+            int8_t y = static_cast<int8_t>(entity.position.y / 2 / cell_size);
+            int8_t z = static_cast<int8_t>(entity.position.z / 2 / cell_size);
+            entity_bins_counts[x][y][z] += 1;
+            entities_in_view += 1;
+        }
+    }
+
+    // Determine the address offset of each entity bin.
+    int entity_bin_offsets[cells_in_view_width][cells_in_view_height]
+                          [cells_in_view_length];
+    int entity_offset_accumulator = 0;
+    for (int x = 0; x < cells_in_view_width; x++) {
+        for (int y = 0; y < cells_in_view_height; y++) {
+            for (int z = 0; z < cells_in_view_length; z++) {
+                entity_bin_offsets[x][y][z] = entity_offset_accumulator *
+                                              static_cast<int>(sizeof(Entity));
+                entity_offset_accumulator += entity_bins_counts[x][y][z];
+            }
+        }
+    }
+
+    Entity* p_entity_bins = new (std::nothrow) Entity[entities_in_view];
+    for (int i = 0; i < entities_in_view; i++) {
+        Entity& entity = entities[i];
+        // TODO: Consider entity's dimensions.
+        if (!(entity.position.x < 0) || !(entity.position.x > view_width) ||
+            !(entity.position.y < 0) ||
+            !(entity.position.y > view_height / 2) ||
+            !(entity.position.z < 0) || !(entity.position.z > view_height)) {
+            int8_t x = static_cast<int8_t>(entity.position.x / cell_size);
+            int8_t y = static_cast<int8_t>(entity.position.y / 2 / cell_size);
+            int8_t z = static_cast<int8_t>(entity.position.z / 2 / cell_size);
+
+            // Subtract entity_bins_counts, because it is used as an address
+            // offset.
+            entity_bins_counts[x][y][z] -= 1;
+            // Place this current entity into the bins at an address relative to
+            // the offset of this <x,y,z> pair, plus an offset which approaches
+            // `0`.
+            p_entity_bins[entity_bin_offsets[x][y][z] +
+                          entity_bins_counts[x][y][z]] = entities[i];
+        }
+    }
+
+    // TODO: Make spatial hash grid.
+
+    // TODO: Make AABBs from entities.
+
+    // TODO: Fit AABBs into grid bins.
+
+    // TODO: Trace 1 ray per pixel through spacial hash.
+
+    // TODO: Test intersection with ray for entities in a bin.
+
+    // TODO: Copy entity color to pixel in frame texture.
+
+    // TODO: Make a trivial pass-through graphics shader pipeline in Vulkan to
+    // render texture.
 }
 
 /* Create an entity.
