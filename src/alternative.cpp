@@ -20,13 +20,40 @@ struct alignas(16) AABB {
             .z = static_cast<int16_t>((min_point.z + max_point.z) / 2),
         };
     }
+
+    auto intersect(Ray& ray) -> bool {
+        double distance_x_1 =
+            (min_point.x - ray.origin.x) * ray.direction_inverse.x;
+        double distance_x_2 =
+            (max_point.x - ray.origin.x) * ray.direction_inverse.x;
+
+        double min_distance = std::min(distance_x_1, distance_x_2);
+        double max_distance = std::max(distance_x_1, distance_x_2);
+
+        double distance_y_1 =
+            (min_point.y - ray.origin.y) * ray.direction_inverse.y;
+        double distance_y_2 =
+            (max_point.y - ray.origin.y) * ray.direction_inverse.y;
+
+        min_distance =
+            std::max(min_distance, std::min(distance_y_1, distance_y_2));
+        max_distance =
+            std::min(max_distance, std::max(distance_y_1, distance_y_2));
+
+        return max_distance >= min_distance;
+    }
 };
+
 // Alignment pads this out from 12 bytes to 16.
 static_assert(sizeof(AABB) == 16);
 
+struct Pixel {
+    int8_t red, green, blue;
+};
+
 struct Entity {
     Point<int32_t> position;
-    std::array<float, 3> color_oklab;
+    Pixel color;  // TODO: Make sprite.
 };
 
 auto make_aabb_from_entity(Entity const& entity) -> AABB {
