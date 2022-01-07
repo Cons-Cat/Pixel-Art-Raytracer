@@ -114,21 +114,35 @@ auto main() -> int {
     for (int i = 0; i < entities.size(); i++) {
         AABB& this_aabb = entities.aabbs[i];
         // If this entity is inside the view bounds.
-        if (!(this_aabb.min_point.x < 0) ||
-            !(this_aabb.max_point.x > view_width) ||
-            !(this_aabb.min_point.y < 0) ||
-            !(this_aabb.max_point.y > view_height / 2) ||
-            !(this_aabb.min_point.z < 0) ||
-            !(this_aabb.max_point.z > view_height)) {
-            int8_t x = static_cast<int8_t>(this_aabb.min_point.x / cell_size);
-            int8_t y =
-                static_cast<int8_t>(this_aabb.min_point.y / 2 / cell_size);
-            int8_t z =
-                static_cast<int8_t>(this_aabb.min_point.z / 2 / cell_size);
+        if ((this_aabb.min_point.x >= 0) ||
+            (this_aabb.max_point.x < view_width) ||
+            (this_aabb.min_point.y >= 0) ||
+            (this_aabb.max_point.y < view_height) ||
+            (this_aabb.min_point.z >= 0) ||
+            (this_aabb.max_point.z < view_height)) {
+            // Get the cells that this AABB fits into.
+            int8_t min_x_index =
+                static_cast<int8_t>(this_aabb.min_point.x / cell_size);
+            int8_t min_y_index =
+                static_cast<int8_t>(this_aabb.min_point.y / cell_size);
+            int8_t min_z_index =
+                static_cast<int8_t>(this_aabb.min_point.z / cell_size);
+            int8_t max_x_index =
+                static_cast<int8_t>(this_aabb.max_point.x / cell_size);
+            int8_t max_y_index =
+                static_cast<int8_t>(this_aabb.max_point.y / cell_size);
+            int8_t max_z_index =
+                static_cast<int8_t>(this_aabb.max_point.z / cell_size);
 
-            entity_count_in_bin[x][y][z] += 1;
-            entities_in_view += 1;
-            // TODO: Sort into multiple bins.
+            // Place this AABB into every bin that it spans across.
+            for (int8_t x = min_x_index; x < max_x_index; x++) {
+                for (int8_t y = min_x_index; y < max_y_index; y++) {
+                    for (int8_t z = min_x_index; z < max_z_index; z++) {
+                        entity_count_in_bin[x][y][z] += 1;
+                        entities_in_view += 1;
+                    }
+                }
+            }
         }
     }
 
@@ -147,29 +161,48 @@ auto main() -> int {
     }
 
     AABB* p_aabb_bins = new (std::nothrow) AABB[entities_in_view];
+    int8_t entity_count_currently_in_bin[cells_in_view_width]
+                                        [cells_in_view_height]
+                                        [cells_in_view_length];
+
     for (int i = 0; i < entities_in_view; i++) {
         AABB& this_aabb = entities.aabbs[i];
         // TODO: Consider entity's dimensions.
-        if (!(this_aabb.min_point.x < 0) ||
-            !(this_aabb.max_point.x > view_width) ||
-            !(this_aabb.min_point.y < 0) ||
-            !(this_aabb.max_point.y > view_height / 2) ||
-            !(this_aabb.min_point.z < 0) ||
-            !(this_aabb.max_point.z > view_height)) {
-            int8_t x = static_cast<int8_t>(this_aabb.min_point.x / cell_size);
-            int8_t y =
-                static_cast<int8_t>(this_aabb.min_point.y / 2 / cell_size);
-            int8_t z =
-                static_cast<int8_t>(this_aabb.min_point.z / 2 / cell_size);
+        if ((this_aabb.min_point.x >= 0) ||
+            (this_aabb.max_point.x < view_width) ||
+            (this_aabb.min_point.y >= 0) ||
+            (this_aabb.max_point.y < view_height) ||
+            (this_aabb.min_point.z >= 0) ||
+            (this_aabb.max_point.z < view_height)) {
+            // Get the cells that this AABB fits into.
+            int8_t min_x_index =
+                static_cast<int8_t>(this_aabb.min_point.x / cell_size);
+            int8_t min_y_index =
+                static_cast<int8_t>(this_aabb.min_point.y / cell_size);
+            int8_t min_z_index =
+                static_cast<int8_t>(this_aabb.min_point.z / cell_size);
+            int8_t max_x_index =
+                static_cast<int8_t>(this_aabb.max_point.x / cell_size);
+            int8_t max_y_index =
+                static_cast<int8_t>(this_aabb.max_point.y / cell_size);
+            int8_t max_z_index =
+                static_cast<int8_t>(this_aabb.max_point.z / cell_size);
 
-            // Subtract entity_bins_counts, because it is used as an address
-            // offset.
-            entity_count_in_bin[x][y][z] -= 1;
-            // Place this this entity into the bins at an address relative to
-            // the offset of this <x,y,z> pair, plus an offset which approaches
-            // `0`.
-            p_aabb_bins[aabb_bin_index_offset[x][y][z] +
-                        entity_count_in_bin[x][y][z]] = this_aabb;
+            // Place this AABB into every bin that it spans across.
+            for (int8_t x = min_x_index; x < max_x_index; x++) {
+                for (int8_t y = min_x_index; y < max_y_index; y++) {
+                    for (int8_t z = min_x_index; z < max_z_index; z++) {
+                        // Place this this entity into the bins at an address
+                        // relative to the offset of this <x,y,z> pair, plus an
+                        // offset which approaches the count of AABBs in that
+                        // bin.
+                        p_aabb_bins[aabb_bin_index_offset[x][y][z] +
+                                    entity_count_currently_in_bin[x][y][z]] =
+                            this_aabb;
+                        entity_count_currently_in_bin[x][y][z] += 1;
+                    }
+                }
+            }
         }
     }
 
@@ -216,6 +249,7 @@ auto main() -> int {
                         }
                     }
                 }
+                texture[i][j] = color;
             }
         }
     }
@@ -224,6 +258,7 @@ auto main() -> int {
 
     // TODO: Make a trivial pass-through graphics shader pipeline in Vulkan to
     // render texture.
+    delete[] p_aabb_bins;
 }
 
 /* Create an entity.
