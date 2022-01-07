@@ -112,20 +112,19 @@ auto main() -> int {
                               [cells_in_view_length];
     int entities_in_view = 0;
     for (int i = 0; i < entities.size(); i++) {
-        AABB& current_aabb = entities.aabbs[i];
+        AABB& this_aabb = entities.aabbs[i];
         // If this entity is inside the view bounds.
-        if (!(current_aabb.min_point.x < 0) ||
-            !(current_aabb.max_point.x > view_width) ||
-            !(current_aabb.min_point.y < 0) ||
-            !(current_aabb.max_point.y > view_height / 2) ||
-            !(current_aabb.min_point.z < 0) ||
-            !(current_aabb.max_point.z > view_height)) {
-            int8_t x =
-                static_cast<int8_t>(current_aabb.min_point.x / cell_size);
+        if (!(this_aabb.min_point.x < 0) ||
+            !(this_aabb.max_point.x > view_width) ||
+            !(this_aabb.min_point.y < 0) ||
+            !(this_aabb.max_point.y > view_height / 2) ||
+            !(this_aabb.min_point.z < 0) ||
+            !(this_aabb.max_point.z > view_height)) {
+            int8_t x = static_cast<int8_t>(this_aabb.min_point.x / cell_size);
             int8_t y =
-                static_cast<int8_t>(current_aabb.min_point.y / 2 / cell_size);
+                static_cast<int8_t>(this_aabb.min_point.y / 2 / cell_size);
             int8_t z =
-                static_cast<int8_t>(current_aabb.min_point.z / 2 / cell_size);
+                static_cast<int8_t>(this_aabb.min_point.z / 2 / cell_size);
 
             entity_count_in_bin[x][y][z] += 1;
             entities_in_view += 1;
@@ -149,37 +148,31 @@ auto main() -> int {
 
     AABB* p_aabb_bins = new (std::nothrow) AABB[entities_in_view];
     for (int i = 0; i < entities_in_view; i++) {
-        AABB& current_aabb = entities.aabbs[i];
+        AABB& this_aabb = entities.aabbs[i];
         // TODO: Consider entity's dimensions.
-        if (!(current_aabb.min_point.x < 0) ||
-            !(current_aabb.max_point.x > view_width) ||
-            !(current_aabb.min_point.y < 0) ||
-            !(current_aabb.max_point.y > view_height / 2) ||
-            !(current_aabb.min_point.z < 0) ||
-            !(current_aabb.max_point.z > view_height)) {
-            int8_t x =
-                static_cast<int8_t>(current_aabb.min_point.x / cell_size);
+        if (!(this_aabb.min_point.x < 0) ||
+            !(this_aabb.max_point.x > view_width) ||
+            !(this_aabb.min_point.y < 0) ||
+            !(this_aabb.max_point.y > view_height / 2) ||
+            !(this_aabb.min_point.z < 0) ||
+            !(this_aabb.max_point.z > view_height)) {
+            int8_t x = static_cast<int8_t>(this_aabb.min_point.x / cell_size);
             int8_t y =
-                static_cast<int8_t>(current_aabb.min_point.y / 2 / cell_size);
+                static_cast<int8_t>(this_aabb.min_point.y / 2 / cell_size);
             int8_t z =
-                static_cast<int8_t>(current_aabb.min_point.z / 2 / cell_size);
+                static_cast<int8_t>(this_aabb.min_point.z / 2 / cell_size);
 
             // Subtract entity_bins_counts, because it is used as an address
             // offset.
             entity_count_in_bin[x][y][z] -= 1;
-            // Place this current entity into the bins at an address relative to
+            // Place this this entity into the bins at an address relative to
             // the offset of this <x,y,z> pair, plus an offset which approaches
             // `0`.
             p_aabb_bins[aabb_bin_index_offset[x][y][z] +
-                        entity_count_in_bin[x][y][z]] = current_aabb;
+                        entity_count_in_bin[x][y][z]] = this_aabb;
         }
     }
 
-    // TODO: Make AABBs from entities.
-
-    // TODO: Fit AABBs into grid bins.
-
-    // TODO: Trace 1 ray per pixel through spatial hash.
     Point<int16_t> ray_direction = {
         .x = 0,
         .y = -1,
@@ -189,7 +182,7 @@ auto main() -> int {
     Pixel texture[view_width][view_height];
     for (int16_t i = 0; i < view_width; i++) {
         for (int16_t j = 1; j < view_height; j++) {
-            Ray ray{
+            Ray this_ray{
                 .origin =
                     {
                         .x = i,
@@ -210,19 +203,22 @@ auto main() -> int {
                 int16_t closest_entity_depth =
                     std::numeric_limits<int16_t>::max();
                 for (int ii = 0; ii < entity_count_in_bin[i][j][k]; ii++) {
-                    Entity& entity =
+                    AABB& this_aabb =
                         p_aabb_bins[aabb_bin_index_offset[i][j][k] + ii];
 
-                    if (entity) color = entity.color;
-                    // Intersect ray with this entity.
+                    // If this entity has closer depth.
+                    if (this_aabb.min_point.y + (j - this_aabb.min_point.y) >
+                        closest_entity_depth) {
+                        // Intersect ray with this aabb.
+                        if (this_aabb.intersect(this_ray)) {
+                            // TODO: Index into the corresponding entity.
+                            color = {1, 1, 1};
+                        }
+                    }
                 }
             }
-next_pixel:
-            continue;
         }
     }
-
-    // TODO: Test intersection with ray for entities in a bin.
 
     // TODO: Copy entity color to pixel in frame texture.
 
