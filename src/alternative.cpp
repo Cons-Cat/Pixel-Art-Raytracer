@@ -5,6 +5,11 @@
 #include <limits>
 #include <new>
 
+// NOLINTNEXTLINE
+auto operator"" _s(unsigned long long value) -> int16_t {
+    return static_cast<int16_t>(value);
+}
+
 template <typename Int>
 struct Point {
     Int x, y, z;
@@ -107,12 +112,17 @@ auto main() -> int {
         });
     }
 
+    int32_t aabb_to_entity_index_map[cells_in_view_width][cells_in_view_height]
+                                    [cells_in_view_length];
+
     // Determine how many entities fit into each entity bin.
-    int8_t entity_count_in_bin[cells_in_view_width][cells_in_view_height]
-                              [cells_in_view_length];
-    int entities_in_view = 0;
+    int8_t aabb_count_in_bin[cells_in_view_width][cells_in_view_height]
+                            [cells_in_view_length];
+    int aabbs_in_view = 0;
+
     for (int i = 0; i < entities.size(); i++) {
         AABB& this_aabb = entities.aabbs[i];
+
         // If this entity is inside the view bounds.
         if ((this_aabb.min_point.x >= 0) ||
             (this_aabb.max_point.x < view_width) ||
@@ -138,8 +148,9 @@ auto main() -> int {
             for (int8_t x = min_x_index; x < max_x_index; x++) {
                 for (int8_t y = min_x_index; y < max_y_index; y++) {
                     for (int8_t z = min_x_index; z < max_z_index; z++) {
-                        entity_count_in_bin[x][y][z] += 1;
-                        entities_in_view += 1;
+                        aabb_count_in_bin[x][y][z] += 1;
+                        aabbs_in_view += 1;
+                        aabb_to_entity_index_map[x][y][z] = i;
                     }
                 }
             }
@@ -155,17 +166,17 @@ auto main() -> int {
             for (int z = 0; z < cells_in_view_length; z++) {
                 aabb_bin_index_offset[x][y][z] =
                     aabb_offset_accumulator * static_cast<int>(sizeof(AABB));
-                aabb_offset_accumulator += entity_count_in_bin[x][y][z];
+                aabb_offset_accumulator += aabb_count_in_bin[x][y][z];
             }
         }
     }
 
-    AABB* p_aabb_bins = new (std::nothrow) AABB[entities_in_view];
+    AABB* p_aabb_bins = new (std::nothrow) AABB[aabbs_in_view];
     int8_t entity_count_currently_in_bin[cells_in_view_width]
                                         [cells_in_view_height]
                                         [cells_in_view_length];
 
-    for (int i = 0; i < entities_in_view; i++) {
+    for (int i = 0; i < aabbs_in_view; i++) {
         AABB& this_aabb = entities.aabbs[i];
         // TODO: Consider entity's dimensions.
         if ((this_aabb.min_point.x >= 0) ||
@@ -209,7 +220,7 @@ auto main() -> int {
     Point<int16_t> ray_direction = {
         .x = 0,
         .y = -1,
-        .z = -1,
+        .z = 1,
     };
 
     Pixel texture[view_width][view_height];
@@ -219,23 +230,23 @@ auto main() -> int {
                 .origin =
                     {
                         .x = i,
-                        .y = view_height,
+                        .y = j,
                         .z = 0,
                     },
                 .direction = ray_direction,
-                // `.direction ./= 1`
                 .direction_inverse =
                     {
-                        .x = 0,
-                        .y = -1,
-                        .z = -1,
+                        // TODO: This might not work ..
+                        .x = static_cast<int16_t>(1_s / ray_direction.x),
+                        .y = static_cast<int16_t>(1_s / ray_direction.y),
+                        .z = static_cast<int16_t>(1_s / ray_direction.z),
                     },
             };
             for (int16_t k = 0; k < j; k++) {
-                Pixel color;
+                Pixel color = {0, 0, 0};
                 int16_t closest_entity_depth =
                     std::numeric_limits<int16_t>::max();
-                for (int ii = 0; ii < entity_count_in_bin[i][j][k]; ii++) {
+                for (int ii = 0; ii < aabb_count_in_bin[i][j][k]; ii++) {
                     AABB& this_aabb =
                         p_aabb_bins[aabb_bin_index_offset[i][j][k] + ii];
 
@@ -244,8 +255,10 @@ auto main() -> int {
                         closest_entity_depth) {
                         // Intersect ray with this aabb.
                         if (this_aabb.intersect(this_ray)) {
-                            // TODO: Index into the corresponding entity.
-                            color = {1, 1, 1};
+                            color =
+                                entities
+                                    .colors[aabb_to_entity_index_map[i][j][k]];
+                            // TODO: Update `closest_entity_depth`.
                         }
                     }
                 }
