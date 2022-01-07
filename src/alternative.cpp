@@ -5,11 +5,6 @@
 #include <limits>
 #include <new>
 
-// NOLINTNEXTLINE
-auto operator"" _s(unsigned long long value) -> int16_t {
-    return static_cast<int16_t>(value);
-}
-
 template <typename Int>
 struct Point {
     Int x, y, z;
@@ -87,12 +82,12 @@ struct Entities {
     }
 };
 
-constexpr int8_t cell_size = 20;
+constexpr int32_t cell_size = 20;
 constexpr int32_t view_width = 480;
 constexpr int32_t view_height = 320;
-constexpr int8_t cells_in_view_width = view_width / cell_size;
-constexpr int8_t cells_in_view_height = view_width / cell_size;
-constexpr int8_t cells_in_view_length = view_width / cell_size;
+constexpr int32_t cells_in_view_width = view_width / cell_size;
+constexpr int32_t cells_in_view_height = view_width / cell_size;
+constexpr int32_t cells_in_view_length = view_width / cell_size;
 
 auto main() -> int {
     constexpr int entity_count = 128;
@@ -124,30 +119,24 @@ auto main() -> int {
         AABB& this_aabb = entities.aabbs[i];
 
         // If this entity is inside the view bounds.
-        if ((this_aabb.min_point.x >= 0) ||
-            (this_aabb.max_point.x < view_width) ||
-            (this_aabb.min_point.y >= 0) ||
-            (this_aabb.max_point.y < view_height) ||
-            (this_aabb.min_point.z >= 0) ||
-            (this_aabb.max_point.z < view_height)) {
+        if ((this_aabb.min_point.x >= 0) &&
+            (this_aabb.max_point.x < view_width) &&
+            (this_aabb.min_point.y >= 0) &&
+            (this_aabb.max_point.y < view_height / 2) &&
+            (this_aabb.min_point.z >= 0) &&
+            (this_aabb.max_point.z < view_height / 2)) {
             // Get the cells that this AABB fits into.
-            int8_t min_x_index =
-                static_cast<int8_t>(this_aabb.min_point.x / cell_size);
-            int8_t min_y_index =
-                static_cast<int8_t>(this_aabb.min_point.y / cell_size);
-            int8_t min_z_index =
-                static_cast<int8_t>(this_aabb.min_point.z / cell_size);
-            int8_t max_x_index =
-                static_cast<int8_t>(this_aabb.max_point.x / cell_size);
-            int8_t max_y_index =
-                static_cast<int8_t>(this_aabb.max_point.y / cell_size);
-            int8_t max_z_index =
-                static_cast<int8_t>(this_aabb.max_point.z / cell_size);
+            int min_x_index = this_aabb.min_point.x / cell_size;
+            int min_y_index = this_aabb.min_point.y / cell_size;
+            int min_z_index = this_aabb.min_point.z / cell_size;
+            int max_x_index = this_aabb.max_point.x / cell_size;
+            int max_y_index = this_aabb.max_point.y / cell_size;
+            int max_z_index = this_aabb.max_point.z / cell_size;
 
             // Place this AABB into every bin that it spans across.
-            for (int8_t x = min_x_index; x < max_x_index; x++) {
-                for (int8_t y = min_x_index; y < max_y_index; y++) {
-                    for (int8_t z = min_x_index; z < max_z_index; z++) {
+            for (int x = min_x_index; x < max_x_index; x++) {
+                for (int y = min_x_index; y < max_y_index; y++) {
+                    for (int z = min_x_index; z < max_z_index; z++) {
                         aabb_count_in_bin[x][y][z] += 1;
                         aabbs_in_view += 1;
                         aabb_to_entity_index_map[x][y][z] = i;
@@ -179,30 +168,24 @@ auto main() -> int {
     for (int i = 0; i < aabbs_in_view; i++) {
         AABB& this_aabb = entities.aabbs[i];
         // TODO: Consider entity's dimensions.
-        if ((this_aabb.min_point.x >= 0) ||
-            (this_aabb.max_point.x < view_width) ||
-            (this_aabb.min_point.y >= 0) ||
-            (this_aabb.max_point.y < view_height) ||
-            (this_aabb.min_point.z >= 0) ||
-            (this_aabb.max_point.z < view_height)) {
+        if ((this_aabb.min_point.x >= 0) &&
+            (this_aabb.max_point.x < view_width) &&
+            (this_aabb.min_point.y >= 0) &&
+            (this_aabb.max_point.y < view_height / 2) &&
+            (this_aabb.min_point.z >= 0) &&
+            (this_aabb.max_point.z < view_height / 2)) {
             // Get the cells that this AABB fits into.
-            int8_t min_x_index =
-                static_cast<int8_t>(this_aabb.min_point.x / cell_size);
-            int8_t min_y_index =
-                static_cast<int8_t>(this_aabb.min_point.y / cell_size);
-            int8_t min_z_index =
-                static_cast<int8_t>(this_aabb.min_point.z / cell_size);
-            int8_t max_x_index =
-                static_cast<int8_t>(this_aabb.max_point.x / cell_size);
-            int8_t max_y_index =
-                static_cast<int8_t>(this_aabb.max_point.y / cell_size);
-            int8_t max_z_index =
-                static_cast<int8_t>(this_aabb.max_point.z / cell_size);
+            int min_x_index = this_aabb.min_point.x / cell_size;
+            int min_y_index = this_aabb.min_point.y / cell_size;
+            int min_z_index = this_aabb.min_point.z / cell_size;
+            int max_x_index = this_aabb.max_point.x / cell_size;
+            int max_y_index = this_aabb.max_point.y / cell_size;
+            int max_z_index = this_aabb.max_point.z / cell_size;
 
             // Place this AABB into every bin that it spans across.
-            for (int8_t x = min_x_index; x < max_x_index; x++) {
-                for (int8_t y = min_x_index; y < max_y_index; y++) {
-                    for (int8_t z = min_x_index; z < max_z_index; z++) {
+            for (int x = min_x_index; x < max_x_index; x++) {
+                for (int y = min_x_index; y < max_y_index; y++) {
+                    for (int z = min_x_index; z < max_z_index; z++) {
                         // Place this this entity into the bins at an address
                         // relative to the offset of this <x,y,z> pair, plus an
                         // offset which approaches the count of AABBs in that
@@ -237,9 +220,9 @@ auto main() -> int {
                 .direction_inverse =
                     {
                         // TODO: This might not work ..
-                        .x = static_cast<int16_t>(1_s / ray_direction.x),
-                        .y = static_cast<int16_t>(1_s / ray_direction.y),
-                        .z = static_cast<int16_t>(1_s / ray_direction.z),
+                        .x = 0,
+                        .y = static_cast<int16_t>(1 / ray_direction.y),
+                        .z = static_cast<int16_t>(1 / ray_direction.z),
                     },
             };
 
