@@ -242,6 +242,7 @@ auto main() -> int {
                         .z = static_cast<int16_t>(1_s / ray_direction.z),
                     },
             };
+
             for (int16_t k = 0; k < j; k++) {
                 Pixel color = {0, 0, 0};
                 int16_t closest_entity_depth =
@@ -259,6 +260,7 @@ auto main() -> int {
                                 entities
                                     .colors[aabb_to_entity_index_map[i][j][k]];
                             // TODO: Update `closest_entity_depth`.
+                            // TODO: Break ray when a cell has any hits.
                         }
                     }
                 }
@@ -266,8 +268,6 @@ auto main() -> int {
             }
         }
     }
-
-    // TODO: Copy entity color to pixel in frame texture.
 
     // TODO: Make a trivial pass-through graphics shader pipeline in Vulkan to
     // render texture.
