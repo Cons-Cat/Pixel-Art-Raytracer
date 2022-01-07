@@ -1,6 +1,8 @@
 #include <liblava/lava.hpp>
 
+#include <cstdint>
 #include <iostream>
+#include <limits>
 #include <new>
 
 template <typename Int>
@@ -57,28 +59,28 @@ struct Pixel {
     int8_t red, green, blue;
 };
 
-struct Entity {
-    Point<int32_t> position;
-    Pixel color;  // TODO: Make sprite.
-};
+template <int entity_count>
+struct Entities {
+    AABB aabbs[entity_count];
+    Point<int32_t> positions[entity_count];
+    Pixel colors[entity_count];  // TODO: Make sprite.
+    int32_t last_entity_index = 0;
 
-auto make_aabb_from_entity(Entity const& entity) -> AABB {
-    return AABB{
-        .min_point =
-            {
-                static_cast<int16_t>(entity.position.x),
-                static_cast<int16_t>(entity.position.y),
-                static_cast<int16_t>(entity.position.z),
-            },
-        .max_point =
-            {
-                // TODO: Make dimensions variable.
-                static_cast<int16_t>(entity.position.x + 20),
-                static_cast<int16_t>(entity.position.y + 20),
-                static_cast<int16_t>(entity.position.z + 20),
-            },
+    using Entity = struct {
+        AABB aabb;
+        Point<int32_t> position;
+        Pixel color;
     };
-}
+    void insert(Entity entity) {
+        aabbs[last_entity_index] = entity.aabb;
+        positions[last_entity_index] = entity.position;
+        colors[last_entity_index] = entity.color;
+        last_entity_index += 1;
+    }
+    auto size() -> int {
+        return entity_count;
+    }
+};
 
 constexpr int8_t cell_size = 20;
 constexpr int32_t view_width = 480;
@@ -88,10 +90,21 @@ constexpr int8_t cells_in_view_height = view_width / cell_size;
 constexpr int8_t cells_in_view_length = view_width / cell_size;
 
 auto main() -> int {
-    std::vector<Entity> entities;
-    entities.reserve(sizeof(Entity) * 128);
-    for (int i = 0; i < entities.capacity(); i++) {
-        entities.emplace_back(std::array<int32_t, 3>{rand(), rand(), rand()});
+    constexpr int entity_count = 128;
+    Entities<entity_count> entities;
+    for (int i = 0; i < entities.size(); i++) {
+        Point<int32_t> new_position = {rand(), rand(), rand()};
+        entities.insert({
+            .aabb = {.min_point = {static_cast<int16_t>(new_position.x),
+                                   static_cast<int16_t>(new_position.y),
+                                   static_cast<int16_t>(new_position.z)},
+                     .max_point = {static_cast<int16_t>(new_position.x + 20),
+                                   static_cast<int16_t>(new_position.y + 20),
+                                   static_cast<int16_t>(new_position.z + 20)}},
+            .position = new_position,
+            .color = {static_cast<int8_t>(255), static_cast<int8_t>(255),
+                      static_cast<int8_t>(255)},
+        });
     }
 
     // Determine how many entities fit into each entity bin.
@@ -99,47 +112,57 @@ auto main() -> int {
                               [cells_in_view_length];
     int entities_in_view = 0;
     for (int i = 0; i < entities.size(); i++) {
-        Entity& entity = entities[i];
+        AABB& current_aabb = entities.aabbs[i];
         // If this entity is inside the view bounds.
-        // TODO: Consider entity's dimensions.
-        if (!(entity.position.x < 0) || !(entity.position.x > view_width) ||
-            !(entity.position.y < 0) ||
-            !(entity.position.y > view_height / 2) ||
-            !(entity.position.z < 0) || !(entity.position.z > view_height)) {
-            int8_t x = static_cast<int8_t>(entity.position.x / cell_size);
-            int8_t y = static_cast<int8_t>(entity.position.y / 2 / cell_size);
-            int8_t z = static_cast<int8_t>(entity.position.z / 2 / cell_size);
+        if (!(current_aabb.min_point.x < 0) ||
+            !(current_aabb.max_point.x > view_width) ||
+            !(current_aabb.min_point.y < 0) ||
+            !(current_aabb.max_point.y > view_height / 2) ||
+            !(current_aabb.min_point.z < 0) ||
+            !(current_aabb.max_point.z > view_height)) {
+            int8_t x =
+                static_cast<int8_t>(current_aabb.min_point.x / cell_size);
+            int8_t y =
+                static_cast<int8_t>(current_aabb.min_point.y / 2 / cell_size);
+            int8_t z =
+                static_cast<int8_t>(current_aabb.min_point.z / 2 / cell_size);
+
             entity_count_in_bin[x][y][z] += 1;
             entities_in_view += 1;
+            // TODO: Sort into multiple bins.
         }
     }
 
     // Determine the address offset of each entity bin.
-    int entity_bin_index_offset[cells_in_view_width][cells_in_view_height]
-                               [cells_in_view_length];
-    int entity_offset_accumulator = 0;
+    int aabb_bin_index_offset[cells_in_view_width][cells_in_view_height]
+                             [cells_in_view_length];
+    int aabb_offset_accumulator = 0;
     for (int x = 0; x < cells_in_view_width; x++) {
         for (int y = 0; y < cells_in_view_height; y++) {
             for (int z = 0; z < cells_in_view_length; z++) {
-                entity_bin_index_offset[x][y][z] =
-                    entity_offset_accumulator *
-                    static_cast<int>(sizeof(Entity));
-                entity_offset_accumulator += entity_count_in_bin[x][y][z];
+                aabb_bin_index_offset[x][y][z] =
+                    aabb_offset_accumulator * static_cast<int>(sizeof(AABB));
+                aabb_offset_accumulator += entity_count_in_bin[x][y][z];
             }
         }
     }
 
-    Entity* p_entity_bins = new (std::nothrow) Entity[entities_in_view];
+    AABB* p_aabb_bins = new (std::nothrow) AABB[entities_in_view];
     for (int i = 0; i < entities_in_view; i++) {
-        Entity& entity = entities[i];
+        AABB& current_aabb = entities.aabbs[i];
         // TODO: Consider entity's dimensions.
-        if (!(entity.position.x < 0) || !(entity.position.x > view_width) ||
-            !(entity.position.y < 0) ||
-            !(entity.position.y > view_height / 2) ||
-            !(entity.position.z < 0) || !(entity.position.z > view_height)) {
-            int8_t x = static_cast<int8_t>(entity.position.x / cell_size);
-            int8_t y = static_cast<int8_t>(entity.position.y / 2 / cell_size);
-            int8_t z = static_cast<int8_t>(entity.position.z / 2 / cell_size);
+        if (!(current_aabb.min_point.x < 0) ||
+            !(current_aabb.max_point.x > view_width) ||
+            !(current_aabb.min_point.y < 0) ||
+            !(current_aabb.max_point.y > view_height / 2) ||
+            !(current_aabb.min_point.z < 0) ||
+            !(current_aabb.max_point.z > view_height)) {
+            int8_t x =
+                static_cast<int8_t>(current_aabb.min_point.x / cell_size);
+            int8_t y =
+                static_cast<int8_t>(current_aabb.min_point.y / 2 / cell_size);
+            int8_t z =
+                static_cast<int8_t>(current_aabb.min_point.z / 2 / cell_size);
 
             // Subtract entity_bins_counts, because it is used as an address
             // offset.
@@ -147,8 +170,8 @@ auto main() -> int {
             // Place this current entity into the bins at an address relative to
             // the offset of this <x,y,z> pair, plus an offset which approaches
             // `0`.
-            p_entity_bins[entity_bin_index_offset[x][y][z] +
-                          entity_count_in_bin[x][y][z]] = entities[i];
+            p_aabb_bins[aabb_bin_index_offset[x][y][z] +
+                        entity_count_in_bin[x][y][z]] = current_aabb;
         }
     }
 
@@ -183,9 +206,14 @@ auto main() -> int {
                     },
             };
             for (int16_t k = 0; k < j; k++) {
+                Pixel color;
+                int16_t closest_entity_depth =
+                    std::numeric_limits<int16_t>::max();
                 for (int ii = 0; ii < entity_count_in_bin[i][j][k]; ii++) {
                     Entity& entity =
-                        p_entity_bins[entity_bin_index_offset[i][j][k] + ii];
+                        p_aabb_bins[aabb_bin_index_offset[i][j][k] + ii];
+
+                    if (entity) color = entity.color;
                     // Intersect ray with this entity.
                 }
             }
