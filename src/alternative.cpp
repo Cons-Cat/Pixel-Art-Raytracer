@@ -56,7 +56,7 @@ struct alignas(16) AABB {
 static_assert(sizeof(AABB) == 16);
 
 struct Pixel {
-    int8_t red, green, blue;
+    uint8_t red, green, blue;
 };
 
 template <int entity_count>
@@ -71,12 +71,15 @@ struct Entities {
         Point<int32_t> position;
         Pixel color;
     };
+
+    // TODO: Consider perfect forwarding or move:
     void insert(Entity entity) {
         aabbs[last_entity_index] = entity.aabb;
         positions[last_entity_index] = entity.position;
         colors[last_entity_index] = entity.color;
         last_entity_index += 1;
     }
+
     auto size() -> int {
         return entity_count;
     }
@@ -86,14 +89,17 @@ constexpr int32_t cell_size = 20;
 constexpr int32_t view_width = 480;
 constexpr int32_t view_height = 320;
 constexpr int32_t cells_in_view_width = view_width / cell_size;
-constexpr int32_t cells_in_view_height = view_width / cell_size;
-constexpr int32_t cells_in_view_length = view_width / cell_size;
+constexpr int32_t cells_in_view_height = view_height / cell_size;
+constexpr int32_t cells_in_view_length = view_height / cell_size;
 
 auto main() -> int {
-    constexpr int entity_count = 128;
+    constexpr int entity_count = 2;
     Entities<entity_count> entities;
+
     for (int i = 0; i < entities.size(); i++) {
-        Point<int32_t> new_position = {rand(), rand(), rand()};
+        Point<int32_t> new_position = {rand() % cells_in_view_width,
+                                       rand() % cells_in_view_height,
+                                       rand() % cells_in_view_length};
         entities.insert({
             .aabb = {.min_point = {static_cast<int16_t>(new_position.x),
                                    static_cast<int16_t>(new_position.y),
@@ -102,8 +108,7 @@ auto main() -> int {
                                    static_cast<int16_t>(new_position.y + 20),
                                    static_cast<int16_t>(new_position.z + 20)}},
             .position = new_position,
-            .color = {static_cast<int8_t>(255), static_cast<int8_t>(255),
-                      static_cast<int8_t>(255)},
+            .color = {255, 255, 255},
         });
     }
 
@@ -247,6 +252,7 @@ auto main() -> int {
                         }
                     }
                 }
+
                 texture[i][j] = color;
             }
         }
