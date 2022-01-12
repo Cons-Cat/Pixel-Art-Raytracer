@@ -102,10 +102,9 @@ auto index_view_cube(int x, int y, int z) -> int {
 }
 
 auto main() -> int {
-    constexpr int entity_count = 20;
+    constexpr int entity_count = 50;
     auto p_entities = new (std::nothrow) Entities<entity_count>;
 
-    // An AABB's volume is currently hard-coded to 20^3.
     for (int i = 0; i < p_entities->size(); i++) {
         // Place entities randomly throughout a cube which bounds the
         // orthographic view frustrum, assuming the camera is at <0,0,0>.
@@ -115,6 +114,7 @@ auto main() -> int {
 
         Point<int32_t> new_position = {x, y, z};
 
+        // An AABB's volume is currently hard-coded to 20^3.
         p_entities->insert({
             .aabb = {.min_point = {static_cast<int16_t>(new_position.x),
                                    static_cast<int16_t>(new_position.y),
@@ -245,8 +245,10 @@ auto main() -> int {
                             p_entities->colors[p_aabb_index_to_entity_index_map
                                                    [index_view_cube(
                                                        bin_x, bin_y, bin_z)]];
+                        break;
                         // TODO: Update `closest_entity_depth`.
-                        // TODO: Break ray when a cell has any hits.
+                        // TODO: Kill ray after intersecting with any AABBs in a
+                        // bin.
                     }
                     // }
                 }
@@ -259,12 +261,12 @@ auto main() -> int {
         }
     }
 
-    // for (int j = 0; j < 320; j++) {
-    //     for (int i = 0; i < 480; i++) {
-    //         std::cout << std::to_string(texture[i][j].blue) << ' ';
-    //     }
-    //     std::cout << '\n';
-    // }
+    for (int j = 0; j < 320; j++) {
+        for (int i = 0; i < 480; i++) {
+            std::cout << std::to_string(p_texture[j * 480 + i].blue) << ' ';
+        }
+        std::cout << '\n';
+    }
 
     // TODO: Make a trivial pass-through graphics shader pipeline in Vulkan to
     // render texture.
