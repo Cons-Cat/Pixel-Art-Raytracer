@@ -137,9 +137,10 @@ auto main() -> int {
     auto p_aabb_count_in_bin = new (
         std::nothrow) int[bin_count_in_view_width * bin_count_in_view_height *
                           bin_count_in_view_length];
-    int aabbs_count_in_view_cube = 0;
 
-    auto* p_aabb_bins = new (std::nothrow) AABB[aabbs_count_in_view_cube];
+    auto* p_aabb_bins = new (std::nothrow)
+        AABB[bin_count_in_view_width * bin_count_in_view_height *
+             bin_count_in_view_length];
     int entity_count_currently_in_bin[bin_count_in_view_width *
                                       bin_count_in_view_height *
                                       bin_count_in_view_length];
@@ -172,7 +173,6 @@ auto main() -> int {
                 for (int z = min_z_index; z <= max_z_index; z += 1) {
                     p_aabb_bins[index_view_cube(x, y, z)] = this_aabb;
 
-                    aabbs_count_in_view_cube += 1;
                     p_aabb_count_in_bin[index_view_cube(x, y, z)] += 1;
                     p_aabb_index_to_entity_index_map[index_view_cube(x, y, z)] =
                         i;
