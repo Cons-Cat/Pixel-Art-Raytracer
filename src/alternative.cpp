@@ -1,5 +1,6 @@
 #include <liblava/lava.hpp>
 
+#include <concepts>
 #include <cstdint>
 #include <iostream>
 #include <limits>
@@ -83,6 +84,49 @@ struct Entities {
 
     auto size() -> int {
         return entity_count;
+    }
+};
+
+template <typename T>
+struct OneDArr {
+    std::vector<T> data;
+    OneDArr() = delete;
+    OneDArr(std::integral auto const width) {
+        data.reserve(width);
+    }
+    auto operator[](std::integral auto x) -> T& {
+        return data[x];
+    }
+};
+
+template <typename T>
+struct TwoDArr {
+    std::vector<OneDArr<T>> data;
+    TwoDArr() = delete;
+    TwoDArr(std::integral auto const width, std::integral auto const height) {
+        data.reserve(height);
+        for (auto& d : data) {
+            d(width);
+        }
+    }
+    auto operator[](std::integral auto y) -> OneDArr<T>& {
+        return data[y];
+    }
+};
+
+template <typename T>
+struct ThreeDArr {
+    std::vector<TwoDArr<T>> data;
+    ThreeDArr() = delete;
+    ThreeDArr(std::integral auto const length, std::integral auto const width,
+              std::integral auto const height) {
+        data.reserve(length);
+        for (auto& d : data) {
+            d(height);
+        }
+    }
+    auto operator[](std::integral auto z) -> TwoDArr<T>& {
+        return data[z];
     }
 };
 
@@ -223,7 +267,8 @@ auto main() -> int {
         .z = 1,
     };
 
-    Pixel texture[view_width][view_height];
+    // Pixel texture[view_width][view_height];
+    auto p_texture = new Resvec<Resvec<Pixel>>(view_width, view_height);
     for (int16_t i = 0; i < view_width; i++) {
         // `j` is a ray's world-position skywards.
         for (int16_t j = 0; j < view_height * 2; j++) {
@@ -279,7 +324,7 @@ auto main() -> int {
                     // }
                 }
 
-                texture[i][j] = color;
+                p_texture[i][j] = color;
             }
         }
     }
