@@ -153,30 +153,29 @@ auto main() -> int {
         AABB& this_aabb = p_entities->aabbs[i];
 
         // Get the cells that this AABB fits into.
-        int min_x_index = this_aabb.min_point.x / cell_size;
-        int min_y_index = this_aabb.min_point.y / cell_size;
-        int min_z_index = this_aabb.min_point.z / cell_size;
+        int min_x_index = std::max(this_aabb.min_point.x / cell_size, 0);
+        int min_y_index = std::max(this_aabb.min_point.y / cell_size, 0);
+        int min_z_index = std::max(this_aabb.min_point.z / cell_size, 0);
 
-        int max_x_index = this_aabb.max_point.x / cell_size;
-        int max_y_index = this_aabb.max_point.y / cell_size;
-        int max_z_index = this_aabb.max_point.z / cell_size;
+        int max_x_index = std::min(this_aabb.max_point.x / cell_size,
+                                   bin_count_in_view_width);
+        int max_y_index = std::min(this_aabb.max_point.y / cell_size,
+                                   bin_count_in_view_height);
+        int max_z_index = std::min(this_aabb.max_point.z / cell_size,
+                                   bin_count_in_view_length);
 
         // TODO: Test if this entity is inside the view frustrum.
 
         // Place this AABB into every bin that it spans across.
-        for (int x = min_x_index; x <= max_x_index; x++) {
-            for (int y = min_y_index; y <= max_y_index; y++) {
-                for (int z = min_z_index; z <= max_z_index; z++) {
-                    if (x < bin_count_in_view_width &&
-                        y < bin_count_in_view_height &&
-                        z < bin_count_in_view_length) {
-                        p_aabb_bins[index_view_cube(x, y, z)] = this_aabb;
+        for (int x = min_x_index; x <= max_x_index; x += 1) {
+            for (int y = min_y_index; y <= max_y_index; y += 1) {
+                for (int z = min_z_index; z <= max_z_index; z += 1) {
+                    p_aabb_bins[index_view_cube(x, y, z)] = this_aabb;
 
-                        aabbs_count_in_view_cube += 1;
-                        p_aabb_count_in_bin[index_view_cube(x, y, z)] += 1;
-                        p_aabb_index_to_entity_index_map[index_view_cube(
-                            x, y, z)] = i;
-                    }
+                    aabbs_count_in_view_cube += 1;
+                    p_aabb_count_in_bin[index_view_cube(x, y, z)] += 1;
+                    p_aabb_index_to_entity_index_map[index_view_cube(x, y, z)] =
+                        i;
                 }
             }
         }
@@ -252,7 +251,10 @@ auto main() -> int {
                     // }
                 }
 
-                p_texture[(j - k) * view_width + i] = background_color;
+                // The camera origin starts at 0, so the current row is
+                // subtracted from the texture height.
+                p_texture[(view_height - j - k) * view_width + i] =
+                    background_color;
             }
         }
     }
