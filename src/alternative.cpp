@@ -224,7 +224,7 @@ auto main() -> int {
                 // If the ray's bin is below the view of the window, stop
                 // travelling, to not index the texture out of bounds.
                 if (j + k > view_height) {
-                    break;
+                    goto break_ray;
                 }
 
                 Pixel background_color = {0, 0, 0};
@@ -269,6 +269,8 @@ auto main() -> int {
                 p_texture[(j + k) * view_width + i] = background_color;
             }
         }
+break_ray:
+        continue;
     }
 
     for (int j = 0; j < 320; j++) {
