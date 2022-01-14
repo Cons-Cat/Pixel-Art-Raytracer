@@ -87,12 +87,12 @@ struct Entities {
     }
 };
 
-constexpr int16_t cell_size = 20;
+constexpr int16_t bin_world_size = 20;
 constexpr int32_t view_width = 480;
 constexpr int32_t view_height = 320;
-constexpr int32_t bin_count_in_view_width = view_width / cell_size;
-constexpr int32_t bin_count_in_view_height = view_height * 2 / cell_size;
-constexpr int32_t bin_count_in_view_length = view_height / cell_size;
+constexpr int32_t bin_count_in_view_width = view_width / bin_world_size;
+constexpr int32_t bin_count_in_view_height = view_height * 2 / bin_world_size;
+constexpr int32_t bin_count_in_view_length = view_height / bin_world_size;
 
 auto index_view_cube(int x, int y, int z) -> int {
     return (x * bin_count_in_view_height * bin_count_in_view_length) +
@@ -101,8 +101,8 @@ auto index_view_cube(int x, int y, int z) -> int {
            ((y + bin_count_in_view_height / 2) * bin_count_in_view_length) + z;
 }
 
-auto main() -> int {
-    constexpr int entity_count = 50;
+auto main() -> int32_t {
+    constexpr int32_t entity_count = 2;
     auto p_entities = new (std::nothrow) Entities<entity_count>;
 
     for (int i = 0; i < p_entities->size(); i++) {
@@ -127,18 +127,19 @@ auto main() -> int {
         });
     }
 
+    int32_t bins_cube_volume = bin_count_in_view_width *
+                               bin_count_in_view_height *
+                               bin_count_in_view_length;
+
     // p_entities is random-access, but the bins they're stored into are not, so
     // we must store a random-access map to the entities' attributes.
-    auto p_aabb_index_to_entity_index_map = new (std::nothrow)
-        int32_t[bin_count_in_view_width * bin_count_in_view_height *
-                bin_count_in_view_length];
+    auto p_aabb_index_to_entity_index_map =
+        new (std::nothrow) int32_t[bins_cube_volume];
 
     // Track how many entities fit into each bin.
-    auto p_aabb_count_in_bin = new (
-        std::nothrow) int[bin_count_in_view_width * bin_count_in_view_height *
-                          bin_count_in_view_length];
+    auto p_aabb_count_in_bin = new (std::nothrow) int32_t[bins_cube_volume];
 
-    auto* p_aabb_bins = new (std::nothrow)
+    auto p_aabb_bins = new (std::nothrow)
         AABB[bin_count_in_view_width * bin_count_in_view_height *
              bin_count_in_view_length];
     int entity_count_currently_in_bin[bin_count_in_view_width *
@@ -146,23 +147,21 @@ auto main() -> int {
                                       bin_count_in_view_length];
 
     // Determine the address offset of each entity AABB bin.
-    auto* p_aabb_bin_index_offset = new (
-        std::nothrow) int[bin_count_in_view_width * bin_count_in_view_height *
-                          bin_count_in_view_length];
+    auto p_aabb_bin_index_offset = new (std::nothrow) int[bins_cube_volume];
 
     for (int i = 0; i < p_entities->size(); i++) {
         AABB& this_aabb = p_entities->aabbs[i];
 
         // Get the cells that this AABB fits into.
-        int min_x_index = std::max(this_aabb.min_point.x / cell_size, 0);
-        int min_y_index = std::max(this_aabb.min_point.y / cell_size, 0);
-        int min_z_index = std::max(this_aabb.min_point.z / cell_size, 0);
+        int min_x_index = std::max(this_aabb.min_point.x / bin_world_size, 0);
+        int min_y_index = std::max(this_aabb.min_point.y / bin_world_size, 0);
+        int min_z_index = std::max(this_aabb.min_point.z / bin_world_size, 0);
 
-        int max_x_index = std::min(this_aabb.max_point.x / cell_size,
+        int max_x_index = std::min(this_aabb.max_point.x / bin_world_size,
                                    bin_count_in_view_width);
-        int max_y_index = std::min(this_aabb.max_point.y / cell_size,
+        int max_y_index = std::min(this_aabb.max_point.y / bin_world_size,
                                    bin_count_in_view_height);
-        int max_z_index = std::min(this_aabb.max_point.z / cell_size,
+        int max_z_index = std::min(this_aabb.max_point.z / bin_world_size,
                                    bin_count_in_view_length);
 
         // TODO: Test if this entity is inside the view frustrum.
@@ -190,7 +189,7 @@ auto main() -> int {
     auto p_texture = new (std::nothrow) Pixel[view_height * view_width];
     for (int16_t i = 0; i < view_width; i++) {
         // `j` is a ray's world-position skywards.
-        for (int16_t j = 0; j < view_height * 2; j++) {
+        for (int16_t j = 0; j < view_height; j++) {
             Ray this_ray{
                 .origin =
                     {
@@ -210,12 +209,13 @@ auto main() -> int {
             // `k` is a ray's world-position casting forwards.
             // It is 2 bytes because it operates on AABB coordinates, which
             // are 2 bytes.
-            for (int16_t k = 0; k < bin_count_in_view_length; k++) {
-                int16_t bin_x = static_cast<int16_t>(i / cell_size);
-                int16_t bin_y = static_cast<int16_t>((j - k) / cell_size);
-                int16_t bin_z = static_cast<int16_t>(k / cell_size);
+            for (int16_t k = 0; k < bin_count_in_view_length * bin_world_size;
+                 k++) {
+                int16_t bin_x = static_cast<int16_t>(i / bin_world_size);
+                int16_t bin_y = static_cast<int16_t>((j - k) / bin_world_size);
+                int16_t bin_z = static_cast<int16_t>(k / bin_world_size);
 
-                if (bin_y < bin_count_in_view_height) {
+                if ((j - k) < 0) {
                     continue;
                 }
 
@@ -253,10 +253,8 @@ auto main() -> int {
                     // }
                 }
 
-                // The camera origin starts at 0, so the current row is
-                // subtracted from the texture height.
-                p_texture[(view_height - j - k) * view_width + i] =
-                    background_color;
+                // TODO: Image must be flipped.
+                p_texture[(j - k) * view_width + i] = background_color;
             }
         }
     }
