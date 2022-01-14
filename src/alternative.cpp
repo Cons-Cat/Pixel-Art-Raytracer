@@ -13,37 +13,37 @@ struct Point {
 };
 
 struct Ray {
-    Point<int16_t> origin;
-    Point<int16_t> direction;
-    Point<int16_t> direction_inverse;
+    Point<short> origin;
+    Point<short> direction;
+    Point<short> direction_inverse;
 };
 
 struct alignas(16) AABB {
-    Point<int16_t> min_point;
-    Point<int16_t> max_point;
+    Point<short> min_point;
+    Point<short> max_point;
 
-    auto get_center() -> Point<int16_t> {
+    auto get_center() -> Point<short> {
         // TODO: Remove these casts.
-        return Point<int16_t>{
-            .x = static_cast<int16_t>((min_point.x + max_point.x) / 2),
-            .y = static_cast<int16_t>((min_point.y + max_point.y) / 2),
-            .z = static_cast<int16_t>((min_point.z + max_point.z) / 2),
+        return Point<short>{
+            .x = static_cast<short>((min_point.x + max_point.x) / 2),
+            .y = static_cast<short>((min_point.y + max_point.y) / 2),
+            .z = static_cast<short>((min_point.z + max_point.z) / 2),
         };
     }
 
     auto intersect(Ray& ray) -> bool {
-        int16_t distance_x_1 = static_cast<int16_t>(
-            (min_point.x - ray.origin.x) * ray.direction_inverse.x);
-        int16_t distance_x_2 = static_cast<int16_t>(
-            (max_point.x - ray.origin.x) * ray.direction_inverse.x);
+        short distance_x_1 = static_cast<short>((min_point.x - ray.origin.x) *
+                                                ray.direction_inverse.x);
+        short distance_x_2 = static_cast<short>((max_point.x - ray.origin.x) *
+                                                ray.direction_inverse.x);
 
-        int16_t min_distance = std::min(distance_x_1, distance_x_2);
-        int16_t max_distance = std::max(distance_x_1, distance_x_2);
+        short min_distance = std::min(distance_x_1, distance_x_2);
+        short max_distance = std::max(distance_x_1, distance_x_2);
 
-        int16_t distance_y_1 = static_cast<int16_t>(
-            (min_point.y - ray.origin.y) * ray.direction_inverse.y);
-        int16_t distance_y_2 = static_cast<int16_t>(
-            (max_point.y - ray.origin.y) * ray.direction_inverse.y);
+        short distance_y_1 = static_cast<short>((min_point.y - ray.origin.y) *
+                                                ray.direction_inverse.y);
+        short distance_y_2 = static_cast<short>((max_point.y - ray.origin.y) *
+                                                ray.direction_inverse.y);
 
         min_distance =
             std::max(min_distance, std::min(distance_y_1, distance_y_2));
@@ -58,19 +58,19 @@ struct alignas(16) AABB {
 static_assert(sizeof(AABB) == 16);
 
 struct Pixel {
-    uint8_t red, green, blue;
+    unsigned char red, green, blue;
 };
 
 template <int entity_count>
 struct Entities {
     AABB aabbs[entity_count];
-    Point<int32_t> positions[entity_count];
+    Point<int> positions[entity_count];
     Pixel colors[entity_count];  // TODO: Make sprite.
-    int32_t last_entity_index = 0;
+    int last_entity_index = 0;
 
     using Entity = struct {
         AABB aabb;
-        Point<int32_t> position;
+        Point<int> position;
         Pixel color;
     };
 
@@ -87,12 +87,12 @@ struct Entities {
     }
 };
 
-constexpr int16_t bin_world_size = 20;
-constexpr int32_t view_width = 480;
-constexpr int32_t view_height = 320;
-constexpr int32_t bin_count_in_view_width = view_width / bin_world_size;
-constexpr int32_t bin_count_in_view_height = view_height * 2 / bin_world_size;
-constexpr int32_t bin_count_in_view_length = view_height / bin_world_size;
+constexpr short bin_world_size = 20;
+constexpr int view_width = 480;
+constexpr int view_height = 320;
+constexpr int bin_count_in_view_width = view_width / bin_world_size;
+constexpr int bin_count_in_view_height = view_height * 2 / bin_world_size;
+constexpr int bin_count_in_view_length = view_height / bin_world_size;
 
 auto index_view_cube(int x, int y, int z) -> int {
     return (x * bin_count_in_view_height * bin_count_in_view_length) +
@@ -101,43 +101,42 @@ auto index_view_cube(int x, int y, int z) -> int {
            ((y + bin_count_in_view_height / 2) * bin_count_in_view_length) + z;
 }
 
-auto main() -> int32_t {
-    constexpr int32_t entity_count = 2;
+auto main() -> int {
+    constexpr int entity_count = 2;
     auto p_entities = new (std::nothrow) Entities<entity_count>;
 
     for (int i = 0; i < p_entities->size(); i++) {
         // Place entities randomly throughout a cube which bounds the
         // orthographic view frustrum, assuming the camera is at <0,0,0>.
-        int32_t x = rand() % (view_width);
-        int32_t y = (rand() % (view_height * 2)) - view_height;
-        int32_t z = rand() % (view_height);
+        int x = rand() % (view_width);
+        int y = (rand() % (view_height * 2)) - view_height;
+        int z = rand() % (view_height);
 
-        Point<int32_t> new_position = {x, y, z};
+        Point<int> new_position = {x, y, z};
 
         // An AABB's volume is currently hard-coded to 20^3.
         p_entities->insert({
-            .aabb = {.min_point = {static_cast<int16_t>(new_position.x),
-                                   static_cast<int16_t>(new_position.y),
-                                   static_cast<int16_t>(new_position.z)},
-                     .max_point = {static_cast<int16_t>(new_position.x + 20),
-                                   static_cast<int16_t>(new_position.y + 20),
-                                   static_cast<int16_t>(new_position.z + 20)}},
+            .aabb = {.min_point = {static_cast<short>(new_position.x),
+                                   static_cast<short>(new_position.y),
+                                   static_cast<short>(new_position.z)},
+                     .max_point = {static_cast<short>(new_position.x + 20),
+                                   static_cast<short>(new_position.y + 20),
+                                   static_cast<short>(new_position.z + 20)}},
             .position = new_position,
             .color = {255u, 255u, 255u},
         });
     }
 
-    int32_t bins_cube_volume = bin_count_in_view_width *
-                               bin_count_in_view_height *
-                               bin_count_in_view_length;
+    int bins_cube_volume = bin_count_in_view_width * bin_count_in_view_height *
+                           bin_count_in_view_length;
 
     // p_entities is random-access, but the bins they're stored into are not, so
     // we must store a random-access map to the entities' attributes.
     auto p_aabb_index_to_entity_index_map =
-        new (std::nothrow) int32_t[bins_cube_volume];
+        new (std::nothrow) int[bins_cube_volume];
 
     // Track how many entities fit into each bin.
-    auto p_aabb_count_in_bin = new (std::nothrow) int32_t[bins_cube_volume];
+    auto p_aabb_count_in_bin = new (std::nothrow) int[bins_cube_volume];
 
     auto p_aabb_bins = new (std::nothrow)
         AABB[bin_count_in_view_width * bin_count_in_view_height *
@@ -181,16 +180,16 @@ auto main() -> int32_t {
         }
     }
 
-    Point<int16_t> ray_direction = {
+    Point<short> ray_direction = {
         .x = 0,
         .y = -1,
         .z = 1,
     };
 
     auto p_texture = new (std::nothrow) Pixel[view_height * view_width];
-    for (int16_t i = 0; i < view_width; i++) {
+    for (short i = 0; i < view_width; i++) {
         // `j` is a ray's world-position skywards.
-        for (int16_t j = 0; j < view_height; j++) {
+        for (short j = 0; j < view_height; j++) {
             Ray this_ray{
                 .origin =
                     {
@@ -210,19 +209,18 @@ auto main() -> int32_t {
             // `k` is a ray's world-position casting forwards.
             // It is 2 bytes because it operates on AABB coordinates, which
             // are 2 bytes.
-            for (int16_t k = 0; k < bin_count_in_view_length * bin_world_size;
+            for (short k = 0; k < bin_count_in_view_length * bin_world_size;
                  k++) {
-                int16_t bin_x = static_cast<int16_t>(i / bin_world_size);
-                int16_t bin_y = static_cast<int16_t>((j - k) / bin_world_size);
-                int16_t bin_z = static_cast<int16_t>(k / bin_world_size);
+                short bin_x = static_cast<short>(i / bin_world_size);
+                short bin_y = static_cast<short>((j - k) / bin_world_size);
+                short bin_z = static_cast<short>(k / bin_world_size);
 
                 if ((j - k) < 0) {
                     continue;
                 }
 
                 Pixel background_color = {0, 0, 0};
-                int16_t closest_entity_depth =
-                    std::numeric_limits<int16_t>::max();
+                short closest_entity_depth = std::numeric_limits<short>::max();
 
                 int entities_in_this_bin =
                     p_aabb_count_in_bin[index_view_cube(bin_x, bin_y, bin_z)];
