@@ -146,8 +146,8 @@ auto main() -> int32_t {
                                       bin_count_in_view_height *
                                       bin_count_in_view_length];
 
-    // Determine the address offset of each entity AABB bin.
-    auto p_aabb_bin_index_offset = new (std::nothrow) int[bins_cube_volume];
+    // Determine the bin index of each entity AABB bin.
+    // auto p_aabb_bin_index = new (std::nothrow) int[bins_cube_volume];
 
     for (int i = 0; i < p_entities->size(); i++) {
         AABB& this_aabb = p_entities->aabbs[i];
@@ -172,6 +172,7 @@ auto main() -> int32_t {
                 for (int z = min_z_index; z <= max_z_index; z += 1) {
                     p_aabb_bins[index_view_cube(x, y, z)] = this_aabb;
 
+                    // p_aabb_bin_index[index_view_cube(x, y, z)];
                     p_aabb_count_in_bin[index_view_cube(x, y, z)] += 1;
                     p_aabb_index_to_entity_index_map[index_view_cube(x, y, z)] =
                         i;
@@ -231,8 +232,7 @@ auto main() -> int32_t {
                      p_aabb_count_in_bin[index_view_cube(bin_x, bin_y, bin_z)];
                      this_bin_entity_index++) {
                     AABB& this_aabb =
-                        p_aabb_bins[p_aabb_bin_index_offset[index_view_cube(
-                                        bin_x, bin_y, bin_z)] +
+                        p_aabb_bins[index_view_cube(bin_x, bin_y, bin_z) +
                                     this_bin_entity_index];
 
                     // TODO: If this entity has closer depth.
