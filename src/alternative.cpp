@@ -101,7 +101,7 @@ auto index_view_cube(int x, int y, int z) -> int {
 }
 
 auto main() -> int {
-    constexpr int entity_count = 2;
+    constexpr int entity_count = 20;
     auto p_entities = new (std::nothrow) Entities<entity_count>;
 
     for (int i = 0; i < p_entities->size(); i++) {
@@ -198,7 +198,7 @@ auto main() -> int {
                 .origin =
                     {
                         .x = i,
-                        .y = j,
+                        .y = static_cast<short>(view_height - j),
                         .z = 0,
                     },
                 .direction_inverse =
@@ -214,12 +214,8 @@ auto main() -> int {
             for (short k = 0; k < bin_count_in_view_length * single_bin_size;
                  k++) {
                 short bin_z = static_cast<short>(k / single_bin_size);
-                short bin_y = static_cast<short>(
-                    // Get the bottom-left view's origin bin. It's all of the
-                    // bins skywards, minus the bin `j` is in.
-                    (bin_count_in_view_height - (j / single_bin_size))
-                    // Subtract the ray's forwards distance.
-                    - bin_z);
+                short bin_y = static_cast<short>(bin_count_in_view_height -
+                                                 (j / single_bin_size));
 
                 // If the ray's bin is below the view of the window, stop
                 // travelling, to not index the texture out of bounds.
