@@ -32,18 +32,18 @@ struct alignas(16) AABB {
     }
 
     auto intersect(Ray& ray) -> bool {
-        double distance_x_1 =
-            (min_point.x - ray.origin.x) * ray.direction_inverse.x;
-        double distance_x_2 =
-            (max_point.x - ray.origin.x) * ray.direction_inverse.x;
+        int16_t distance_x_1 = static_cast<int16_t>(
+            (min_point.x - ray.origin.x) * ray.direction_inverse.x);
+        int16_t distance_x_2 = static_cast<int16_t>(
+            (max_point.x - ray.origin.x) * ray.direction_inverse.x);
 
-        double min_distance = std::min(distance_x_1, distance_x_2);
-        double max_distance = std::max(distance_x_1, distance_x_2);
+        int16_t min_distance = std::min(distance_x_1, distance_x_2);
+        int16_t max_distance = std::max(distance_x_1, distance_x_2);
 
-        double distance_y_1 =
-            (min_point.y - ray.origin.y) * ray.direction_inverse.y;
-        double distance_y_2 =
-            (max_point.y - ray.origin.y) * ray.direction_inverse.y;
+        int16_t distance_y_1 = static_cast<int16_t>(
+            (min_point.y - ray.origin.y) * ray.direction_inverse.y);
+        int16_t distance_y_2 = static_cast<int16_t>(
+            (max_point.y - ray.origin.y) * ray.direction_inverse.y);
 
         min_distance =
             std::max(min_distance, std::min(distance_y_1, distance_y_2));
