@@ -87,18 +87,17 @@ struct Entities {
     }
 };
 
-constexpr short bin_world_size = 20;
+constexpr short single_bin_size = 20;
 constexpr int view_width = 480;
 constexpr int view_height = 320;
-constexpr int bin_count_in_view_width = view_width / bin_world_size;
-constexpr int bin_count_in_view_height = view_height * 2 / bin_world_size;
-constexpr int bin_count_in_view_length = view_height / bin_world_size;
+constexpr int bin_count_in_view_width = view_width / single_bin_size;
+// You can see bins as low along Y as the height of the view window.
+constexpr int bin_count_in_view_height = view_height * 2 / single_bin_size;
+constexpr int bin_count_in_view_length = view_height / single_bin_size;
 
 auto index_view_cube(int x, int y, int z) -> int {
     return (x * bin_count_in_view_height * bin_count_in_view_length) +
-           // The y must be offset by the number of cells below the view's
-           // origin, to prevent negative indexing.
-           ((y + bin_count_in_view_height / 2) * bin_count_in_view_length) + z;
+           (y * bin_count_in_view_length) + z;
 }
 
 auto main() -> int {
@@ -152,15 +151,15 @@ auto main() -> int {
         AABB& this_aabb = p_entities->aabbs[i];
 
         // Get the cells that this AABB fits into.
-        int min_x_index = std::max(this_aabb.min_point.x / bin_world_size, 0);
-        int min_y_index = std::max(this_aabb.min_point.y / bin_world_size, 0);
-        int min_z_index = std::max(this_aabb.min_point.z / bin_world_size, 0);
+        int min_x_index = std::max(this_aabb.min_point.x / single_bin_size, 0);
+        int min_y_index = std::max(this_aabb.min_point.y / single_bin_size, 0);
+        int min_z_index = std::max(this_aabb.min_point.z / single_bin_size, 0);
 
-        int max_x_index = std::min(this_aabb.max_point.x / bin_world_size,
+        int max_x_index = std::min(this_aabb.max_point.x / single_bin_size,
                                    bin_count_in_view_width);
-        int max_y_index = std::min(this_aabb.max_point.y / bin_world_size,
+        int max_y_index = std::min(this_aabb.max_point.y / single_bin_size,
                                    bin_count_in_view_height);
-        int max_z_index = std::min(this_aabb.max_point.z / bin_world_size,
+        int max_z_index = std::min(this_aabb.max_point.z / single_bin_size,
                                    bin_count_in_view_length);
 
         // TODO: Test if this entity is inside the view frustrum.
@@ -187,8 +186,13 @@ auto main() -> int {
     };
 
     auto p_texture = new (std::nothrow) Pixel[view_height * view_width];
+
+    // `i` is a ray's world-position lateral to the ground, iterating
+    // rightwards.
     for (short i = 0; i < view_width; i++) {
-        // `j` is a ray's world-position skywards.
+        short bin_x = static_cast<short>(i / single_bin_size);
+
+        // `j` is a ray's world-position skywards, iterating downwards.
         for (short j = 0; j < view_height; j++) {
             Ray this_ray{
                 .origin =
@@ -207,16 +211,20 @@ auto main() -> int {
             };
 
             // `k` is a ray's world-position casting forwards.
-            // It is 2 bytes because it operates on AABB coordinates, which
-            // are 2 bytes.
-            for (short k = 0; k < bin_count_in_view_length * bin_world_size;
+            for (short k = 0; k < bin_count_in_view_length * single_bin_size;
                  k++) {
-                short bin_x = static_cast<short>(i / bin_world_size);
-                short bin_y = static_cast<short>((j - k) / bin_world_size);
-                short bin_z = static_cast<short>(k / bin_world_size);
+                short bin_z = static_cast<short>(k / single_bin_size);
+                short bin_y = static_cast<short>(
+                    // Get the bottom-left view's origin bin. It's all of the
+                    // bins skywards, minus the bin `j` is in.
+                    (bin_count_in_view_height - (j / single_bin_size))
+                    // Subtract the ray's forwards distance.
+                    - bin_z);
 
-                if ((j - k) < 0) {
-                    continue;
+                // If the ray's bin is below the view of the window, stop
+                // travelling, to not index the texture out of bounds.
+                if (j + k > view_height) {
+                    break;
                 }
 
                 Pixel background_color = {0, 0, 0};
@@ -237,6 +245,12 @@ auto main() -> int {
                     // if (this_aabb.min_point.y + (j - this_aabb.min_point.y) >
                     // closest_entity_depth) {
 
+                    // TODO: Remove this:
+                    background_color =
+                        p_entities->colors
+                            [p_aabb_index_to_entity_index_map[index_view_cube(
+                                bin_x, bin_y, bin_z)]];
+
                     // Intersect ray with this aabb.
                     if (this_aabb.intersect(this_ray)) {
                         background_color =
@@ -252,16 +266,18 @@ auto main() -> int {
                 }
 
                 // TODO: Image must be flipped.
-                p_texture[(j - k) * view_width + i] = background_color;
+                p_texture[(j + k) * view_width + i] = background_color;
             }
         }
     }
 
     for (int j = 0; j < 320; j++) {
+        std::cout << "Row " << j << ": ";
         for (int i = 0; i < 480; i++) {
+            // std::cout << "Column: " << i << ": ";
             std::cout << std::to_string(p_texture[j * 480 + i].blue) << ' ';
         }
-        std::cout << '\n';
+        std::cout << "\n\n";
     }
 
     // TODO: Make a trivial pass-through graphics shader pipeline in Vulkan to
