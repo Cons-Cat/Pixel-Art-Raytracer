@@ -94,14 +94,17 @@ struct Entities {
 constexpr short single_bin_size = 20;
 constexpr int view_width = 480;
 constexpr int view_height = 320;
-constexpr int bin_count_in_view_width = view_width / single_bin_size;
+constexpr int bin_count_in_hash_width = view_width / single_bin_size;
 // You can see bins as low along Y as the height of the view window.
-constexpr int bin_count_in_view_height = view_height * 2 / single_bin_size;
-constexpr int bin_count_in_view_length = view_height / single_bin_size;
+constexpr int bin_count_in_hash_height = view_height * 2 / single_bin_size;
+constexpr int bin_count_in_hash_length = view_height / single_bin_size;
 
+// The spatial hash is organized near-to-far, by bottom-to-top, by
+// left-to-right.
+// That is generally a cache-friendly layout for this data.
 auto index_into_view_hash(int x, int y, int z) -> int {
-    return (x * bin_count_in_view_height * bin_count_in_view_length) +
-           (y * bin_count_in_view_length) + z;
+    return (x * bin_count_in_hash_height * bin_count_in_hash_length) +
+           (y * bin_count_in_hash_length) + z;
 }
 
 auto main() -> int {
@@ -109,11 +112,12 @@ auto main() -> int {
     auto p_entities = new (std::nothrow) Entities<entity_count>;
 
     for (int i = 0; i < p_entities->size(); i++) {
-        // Place entities randomly throughout a cube which bounds the
-        // orthographic view frustrum, assuming the camera is at <0,0,0>.
-        int x = rand() % (view_width);
+        // Place entities, in world-space, randomly throughout a cube which
+        // bounds the orthographic view frustrum, assuming the camera is at
+        // <0,0,0>.
+        int x = (rand() % (view_width));
         int y = (rand() % (view_height * 2)) - view_height;
-        int z = rand() % (view_height);
+        int z = (rand() % (view_height));
 
         Point<int> new_position = {x, y, z};
 
@@ -130,23 +134,23 @@ auto main() -> int {
         });
     }
 
-    int bins_cube_volume = bin_count_in_view_width * bin_count_in_view_height *
-                           bin_count_in_view_length;
+    int hash_cube_volume = bin_count_in_hash_width * bin_count_in_hash_height *
+                           bin_count_in_hash_length;
 
     // p_entities is random-access, but the bins they're stored into are not, so
     // we must store a random-access map to the entities' attributes.
     auto p_aabb_index_to_entity_index_map =
-        new (std::nothrow) int[bins_cube_volume];
+        new (std::nothrow) int[hash_cube_volume];
 
     // Track how many entities fit into each bin.
-    auto p_aabb_count_in_bin = new (std::nothrow) int[bins_cube_volume];
+    auto p_aabb_count_in_bin = new (std::nothrow) int[hash_cube_volume];
 
     auto p_aabb_bins = new (std::nothrow)
-        AABB[bin_count_in_view_width * bin_count_in_view_height *
-             bin_count_in_view_length];
-    int entity_count_currently_in_bin[bin_count_in_view_width *
-                                      bin_count_in_view_height *
-                                      bin_count_in_view_length];
+        AABB[bin_count_in_hash_width * bin_count_in_hash_height *
+             bin_count_in_hash_length];
+    int entity_count_currently_in_bin[bin_count_in_hash_width *
+                                      bin_count_in_hash_height *
+                                      bin_count_in_hash_length];
 
     // Determine the bin index of each entity AABB bin.
     // auto p_aabb_bin_index = new (std::nothrow) int[bins_cube_volume];
@@ -155,29 +159,36 @@ auto main() -> int {
         AABB& this_aabb = p_entities->aabbs[i];
 
         // Get the cells that this AABB fits into.
-        int min_x_index = std::max(this_aabb.min_point.x / single_bin_size, 0);
-        int min_y_index = std::max(this_aabb.min_point.y / single_bin_size, 0);
-        int min_z_index = std::max(this_aabb.min_point.z / single_bin_size, 0);
+        int min_x_index = this_aabb.min_point.x / single_bin_size;
+        int min_y_index = this_aabb.min_point.y / single_bin_size;
+        int min_z_index = this_aabb.min_point.z / single_bin_size;
 
-        int max_x_index = std::min(this_aabb.max_point.x / single_bin_size,
-                                   bin_count_in_view_width);
-        int max_y_index = std::min(this_aabb.max_point.y / single_bin_size,
-                                   bin_count_in_view_height);
-        int max_z_index = std::min(this_aabb.max_point.z / single_bin_size,
-                                   bin_count_in_view_length);
+        int max_x_index = this_aabb.max_point.x / single_bin_size;
+        int max_y_index = this_aabb.max_point.y / single_bin_size;
+        int max_z_index = this_aabb.max_point.z / single_bin_size;
 
-        // TODO: Test if this entity is inside the view frustrum.
+        // Skip this entity if it is outside the view bounds.
+        // TODO: Make this comparison is world-space before the division
+        // operations.
+        if (min_x_index < 0 || min_y_index < 0 || min_z_index < 0 ||
+            max_x_index > bin_count_in_hash_width ||
+            max_y_index > bin_count_in_hash_height ||
+            max_z_index > bin_count_in_hash_width) {
+            break;
+        }
 
         // Place this AABB into every bin that it spans across.
-        for (int x = min_x_index; x <= max_x_index; x += 1) {
-            for (int y = min_y_index; y <= max_y_index; y += 1) {
-                for (int z = min_z_index; z <= max_z_index; z += 1) {
-                    p_aabb_bins[index_into_view_hash(x, y, z)] = this_aabb;
+        for (int bin_x = min_x_index; bin_x <= max_x_index; bin_x += 1) {
+            for (int bin_y = min_y_index; bin_y <= max_y_index; bin_y += 1) {
+                for (int bin_z = min_z_index; bin_z <= max_z_index;
+                     bin_z += 1) {
+                    p_aabb_bins[index_into_view_hash(bin_x, bin_y, bin_z)] =
+                        this_aabb;
 
-                    // p_aabb_bin_index[index_view_cube(x, y, z)];
-                    p_aabb_count_in_bin[index_into_view_hash(x, y, z)] += 1;
+                    p_aabb_count_in_bin[index_into_view_hash(bin_x, bin_y,
+                                                             bin_z)] += 1;
                     p_aabb_index_to_entity_index_map[index_into_view_hash(
-                        x, y, z)] = i;
+                        bin_x, bin_y, bin_z)] = i;
                 }
             }
         }
@@ -194,45 +205,50 @@ auto main() -> int {
     // `i` is a ray's world-position lateral to the ground, iterating
     // rightwards.
     for (short i = 0; i < view_width; i++) {
-        short bin_x = static_cast<short>(i / single_bin_size);
-
         // `j` is a ray's world-position skywards, iterating downwards.
         for (short j = 0; j < view_height; j++) {
-            Ray this_ray{
+            Ray this_ray = {
                 .origin =
                     {
                         .x = i,
                         .y = static_cast<short>(view_height - j),
                         .z = 0,
                     },
+                // The direction in world-space is <0, -1, 1>
+                // The direction in hash-space is <0, 1, 1>
                 .direction_inverse =
                     {
                         // TODO: This might not work ..
                         .x = 0,
-                        .y = 1,  // -1 / 1
-                        .z = 1,  //  1 / 1
+                        .y = 1,   // -1 / -1
+                        .z = -1,  // 1 / -1
                     },
             };
 
+            int bin_x = static_cast<short>(i / single_bin_size);
+
             // `k` is a ray's world-position casting forwards.
-            for (short k = 0; k < bin_count_in_view_length * single_bin_size;
+            for (short k = 0; k < bin_count_in_hash_length * single_bin_size;
                  k++) {
-                short bin_z = static_cast<short>(k / single_bin_size);
-                short bin_y = static_cast<short>(bin_count_in_view_height -
-                                                 (j / single_bin_size));
+                int bin_z = static_cast<short>(k / single_bin_size);
+                int bin_y = static_cast<short>(bin_count_in_hash_height -
+                                               (j / single_bin_size));
 
                 // If the ray's bin is below the view of the window, stop
                 // travelling, to not index the texture out of bounds.
+                //
+                // TODO: Refactor so that there are no bins out of view.
                 if (j + k > view_height) {
-                    goto break_ray;
+                    goto break_pixel;
                 }
 
-                Pixel background_color = {25, 25, 25};
-                short closest_entity_depth = std::numeric_limits<short>::max();
+                // short closest_entity_depth =
+                // std::numeric_limits<short>::max();
 
                 int entities_in_this_bin =
                     p_aabb_count_in_bin[index_into_view_hash(bin_x, bin_y,
                                                              bin_z)];
+                Pixel background_color = {25, 25, 25};
 
                 for (int this_bin_entity_index = 0;
                      this_bin_entity_index <
@@ -267,22 +283,26 @@ auto main() -> int {
                     // }
                 }
 
+                // `j` and `k` increase as the cursor moves downwards.
+                // `i` increases as the cursor moves rightwards.
                 p_texture[(j + k) * view_width + i] = background_color;
             }
         }
-break_ray:
+break_pixel:
         continue;
     }
 
-    // for (int j = 0; j < view_height; j++) {
-    //     std::cout << "Row " << j << ": ";
-    //     for (int i = 0; i < view_width; i++) {
-    //         // std::cout << "Column: " << i << ": ";
-    //         std::cout << std::to_string(p_texture[j * view_width + i].blue)
-    //                   << ' ';
-    //     }
-    //     std::cout << "\n\n";
-    // }
+    for (int j = 0; j < view_height; j++) {
+        std::cout << "Row " << j << ": ";
+        for (int i = 0; i < view_width; i++) {
+            int col = p_texture[j * view_width + i].blue;
+            if (col == 25) {
+                col = 0;
+            }
+            std::cout << std::to_string(col) << ' ';
+        }
+        std::cout << "\n\n";
+    }
 
     // TODO: Make a trivial pass-through graphics shader pipeline in Vulkan to
     // render texture.
@@ -299,7 +319,9 @@ break_ray:
         SDL_CreateTexture(p_renderer, SDL_PIXELFORMAT_RGB888,
                           SDL_TEXTUREACCESS_STREAMING, view_width, view_height);
 
-    int texture_row_size = view_width * sizeof(Pixel);
+    // `texture_row_size` is required by `SDL_LockTexture`, but it isn't used
+    // for anything interesting.
+    int texture_row_size;
     void* p_blit = new (std::nothrow) Pixel[view_height * view_width];
     SDL_LockTexture(p_sdl_texture, nullptr, &p_blit, &texture_row_size);
     memcpy(p_blit, p_texture, view_width * view_height * sizeof(Pixel));
@@ -317,7 +339,6 @@ break_ray:
         SDL_RenderPresent(p_renderer);
     }
 
-    SDL_UnlockTexture(p_sdl_texture);
     SDL_DestroyTexture(p_sdl_texture);
     SDL_DestroyWindow(p_window);
     SDL_DestroyRenderer(p_renderer);
