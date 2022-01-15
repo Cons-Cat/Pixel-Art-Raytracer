@@ -224,6 +224,8 @@ auto main() -> int {
                     },
             };
 
+            Pixel background_color = {35, 35, 25};
+
             int bin_x = static_cast<short>(i / single_bin_size);
 
             // `k` is a ray's world-position casting forwards.
@@ -233,22 +235,12 @@ auto main() -> int {
                 int bin_y = static_cast<short>(bin_count_in_hash_height -
                                                (j / single_bin_size));
 
-                // If the ray's bin is below the view of the window, stop
-                // travelling, to not index the texture out of bounds.
-                //
-                // TODO: Refactor so that there are no bins out of view.
-                if (j + k > view_height) {
-                    goto break_pixel;
-                }
-
                 // short closest_entity_depth =
                 // std::numeric_limits<short>::max();
 
                 int entities_in_this_bin =
                     p_aabb_count_in_bin[index_into_view_hash(bin_x, bin_y,
                                                              bin_z)];
-                Pixel background_color = {25, 25, 25};
-
                 for (int this_bin_entity_index = 0;
                      this_bin_entity_index <
                      p_aabb_count_in_bin[index_into_view_hash(bin_x, bin_y,
@@ -282,14 +274,12 @@ auto main() -> int {
                         // in a bin.
                     }
                 }
-
-                // `j` and `k` increase as the cursor moves downwards.
-                // `i` increases as the cursor moves rightwards.
-                p_texture[j * view_width + i] = background_color;
             }
+
+            // `j` increases as the cursor moves downwards.
+            // `i` increases as the cursor moves rightwards.
+            p_texture[j * view_width + i] = background_color;
         }
-break_pixel:
-        continue;
     }
 
     for (int j = 0; j < view_height; j++) {
