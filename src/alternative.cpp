@@ -99,7 +99,7 @@ constexpr int bin_count_in_view_width = view_width / single_bin_size;
 constexpr int bin_count_in_view_height = view_height * 2 / single_bin_size;
 constexpr int bin_count_in_view_length = view_height / single_bin_size;
 
-auto index_view_cube(int x, int y, int z) -> int {
+auto index_into_view_hash(int x, int y, int z) -> int {
     return (x * bin_count_in_view_height * bin_count_in_view_length) +
            (y * bin_count_in_view_length) + z;
 }
@@ -172,12 +172,12 @@ auto main() -> int {
         for (int x = min_x_index; x <= max_x_index; x += 1) {
             for (int y = min_y_index; y <= max_y_index; y += 1) {
                 for (int z = min_z_index; z <= max_z_index; z += 1) {
-                    p_aabb_bins[index_view_cube(x, y, z)] = this_aabb;
+                    p_aabb_bins[index_into_view_hash(x, y, z)] = this_aabb;
 
                     // p_aabb_bin_index[index_view_cube(x, y, z)];
-                    p_aabb_count_in_bin[index_view_cube(x, y, z)] += 1;
-                    p_aabb_index_to_entity_index_map[index_view_cube(x, y, z)] =
-                        i;
+                    p_aabb_count_in_bin[index_into_view_hash(x, y, z)] += 1;
+                    p_aabb_index_to_entity_index_map[index_into_view_hash(
+                        x, y, z)] = i;
                 }
             }
         }
@@ -231,14 +231,16 @@ auto main() -> int {
                 short closest_entity_depth = std::numeric_limits<short>::max();
 
                 int entities_in_this_bin =
-                    p_aabb_count_in_bin[index_view_cube(bin_x, bin_y, bin_z)];
+                    p_aabb_count_in_bin[index_into_view_hash(bin_x, bin_y,
+                                                             bin_z)];
 
                 for (int this_bin_entity_index = 0;
                      this_bin_entity_index <
-                     p_aabb_count_in_bin[index_view_cube(bin_x, bin_y, bin_z)];
+                     p_aabb_count_in_bin[index_into_view_hash(bin_x, bin_y,
+                                                              bin_z)];
                      this_bin_entity_index++) {
                     AABB& this_aabb =
-                        p_aabb_bins[index_view_cube(bin_x, bin_y, bin_z) +
+                        p_aabb_bins[index_into_view_hash(bin_x, bin_y, bin_z) +
                                     this_bin_entity_index];
 
                     // TODO: If this entity has closer depth.
@@ -247,15 +249,15 @@ auto main() -> int {
 
                     // TODO: Remove this:
                     background_color =
-                        p_entities->colors
-                            [p_aabb_index_to_entity_index_map[index_view_cube(
-                                bin_x, bin_y, bin_z)]];
+                        p_entities->colors[p_aabb_index_to_entity_index_map
+                                               [index_into_view_hash(
+                                                   bin_x, bin_y, bin_z)]];
 
                     // Intersect ray with this aabb.
                     if (this_aabb.intersect(this_ray)) {
                         background_color =
                             p_entities->colors[p_aabb_index_to_entity_index_map
-                                                   [index_view_cube(
+                                                   [index_into_view_hash(
                                                        bin_x, bin_y, bin_z)]];
                         break;
                         // TODO: Update `closest_entity_depth`.
@@ -298,9 +300,9 @@ break_ray:
 
     // This must be mutable for `SDL_LockTexture()`. `const_cast<>()` doesn't
     // work here.
-    int mutable_view_width = view_width;
+    int texture_row_size = view_width * sizeof(Pixel);
     void* p_blit = new (std::nothrow) Pixel[view_height * view_width];
-    SDL_LockTexture(p_sdl_texture, nullptr, &p_blit, &mutable_view_width);
+    SDL_LockTexture(p_sdl_texture, nullptr, &p_blit, &texture_row_size);
     memcpy(p_blit, p_texture, view_width * view_height * sizeof(Pixel));
     SDL_UnlockTexture(p_sdl_texture);
 
