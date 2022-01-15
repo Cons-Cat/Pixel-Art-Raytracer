@@ -274,11 +274,12 @@ break_ray:
         continue;
     }
 
-    // for (int j = 0; j < 320; j++) {
+    // for (int j = 0; j < view_height; j++) {
     //     std::cout << "Row " << j << ": ";
-    //     for (int i = 0; i < 480; i++) {
+    //     for (int i = 0; i < view_width; i++) {
     //         // std::cout << "Column: " << i << ": ";
-    //         std::cout << std::to_string(p_texture[j * 480 + i].blue) << ' ';
+    //         std::cout << std::to_string(p_texture[j * view_width + i].blue)
+    //                   << ' ';
     //     }
     //     std::cout << "\n\n";
     // }
@@ -289,7 +290,7 @@ break_ray:
     SDL_InitSubSystem(SDL_INIT_VIDEO);
 
     SDL_Window* p_window =
-        SDL_CreateWindow("alternative", SDL_WINDOWPOS_UNDEFINED,
+        SDL_CreateWindow(nullptr, SDL_WINDOWPOS_UNDEFINED,
                          SDL_WINDOWPOS_UNDEFINED, view_width, view_height, 0);
     SDL_Renderer* p_renderer =
         SDL_CreateRenderer(p_window, -1, SDL_RENDERER_SOFTWARE);
@@ -298,18 +299,25 @@ break_ray:
         SDL_CreateTexture(p_renderer, SDL_PIXELFORMAT_RGB888,
                           SDL_TEXTUREACCESS_STREAMING, view_width, view_height);
 
-    // This must be mutable for `SDL_LockTexture()`. `const_cast<>()` doesn't
-    // work here.
     int texture_row_size = view_width * sizeof(Pixel);
     void* p_blit = new (std::nothrow) Pixel[view_height * view_width];
     SDL_LockTexture(p_sdl_texture, nullptr, &p_blit, &texture_row_size);
     memcpy(p_blit, p_texture, view_width * view_height * sizeof(Pixel));
     SDL_UnlockTexture(p_sdl_texture);
 
-    SDL_RenderCopy(p_renderer, p_sdl_texture, nullptr, nullptr);
-    SDL_RenderPresent(p_renderer);
+    while (true) {
+        SDL_Event e;
+        if (SDL_PollEvent(&e)) {
+            if (e.type == SDL_QUIT) {
+                break;
+            } else if (e.type == SDL_KEYUP && e.key.keysym.sym == SDLK_ESCAPE) {
+                break;
+            }
+        }
 
-    SDL_Delay(3000);
+        SDL_RenderCopy(p_renderer, p_sdl_texture, nullptr, nullptr);
+        SDL_RenderPresent(p_renderer);
+    }
 
     SDL_UnlockTexture(p_sdl_texture);
     SDL_DestroyTexture(p_sdl_texture);
