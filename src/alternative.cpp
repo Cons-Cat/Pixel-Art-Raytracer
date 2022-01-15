@@ -1,6 +1,7 @@
 #include <liblava/lava.hpp>
 
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_rect.h>
 #include <SDL2/SDL_render.h>
 #include <SDL2/SDL_surface.h>
 #include <SDL2/SDL_video.h>
@@ -22,7 +23,7 @@ struct Ray {
     Point<short> direction_inverse;
 };
 
-struct alignas(16) AABB {
+struct AABB {
     Point<short> min_point;
     Point<short> max_point;
 
@@ -59,7 +60,7 @@ struct alignas(16) AABB {
 };
 
 // Alignment pads this out from 12 bytes to 16.
-static_assert(sizeof(AABB) == 16);
+// static_assert(sizeof(AABB) == 16);
 
 struct Pixel {
     unsigned char red, green, blue;
@@ -96,20 +97,22 @@ constexpr int view_width = 480;
 constexpr int view_height = 320;
 constexpr int bin_count_in_hash_width = view_width / single_bin_size;
 // You can see bins as low along Y as the height of the view window.
-constexpr int bin_count_in_hash_height = view_height * 2 / single_bin_size;
+constexpr int hash_height = view_height * 2 / single_bin_size;
 constexpr int bin_count_in_hash_length = view_height / single_bin_size;
 
 // The spatial hash is organized near-to-far, by bottom-to-top, by
 // left-to-right.
 // That is generally a cache-friendly layout for this data.
 auto index_into_view_hash(int x, int y, int z) -> int {
-    return (x * bin_count_in_hash_height * bin_count_in_hash_length) +
+    return (x * hash_height * bin_count_in_hash_length) +
            (y * bin_count_in_hash_length) + z;
 }
 
 auto main() -> int {
     constexpr int entity_count = 20;
     auto p_entities = new (std::nothrow) Entities<entity_count>;
+
+    srand(time(NULL));
 
     for (int i = 0; i < p_entities->size(); i++) {
         // Place entities, in world-space, randomly throughout a cube which
@@ -130,12 +133,13 @@ auto main() -> int {
                                    static_cast<short>(new_position.y + 20),
                                    static_cast<short>(new_position.z + 20)}},
             .position = new_position,
-            .color = {255u, 255u, 255u},
+            .color = {static_cast<unsigned char>(rand() % 255u),
+                      static_cast<unsigned char>(rand() % 255u), 255u},
         });
     }
 
-    int hash_cube_volume = bin_count_in_hash_width * bin_count_in_hash_height *
-                           bin_count_in_hash_length;
+    int hash_cube_volume =
+        bin_count_in_hash_width * hash_height * bin_count_in_hash_length;
 
     // p_entities is random-access, but the bins they're stored into are not, so
     // we must store a random-access map to the entities' attributes.
@@ -146,25 +150,22 @@ auto main() -> int {
     auto p_aabb_count_in_bin = new (std::nothrow) int[hash_cube_volume];
 
     auto p_aabb_bins = new (std::nothrow)
-        AABB[bin_count_in_hash_width * bin_count_in_hash_height *
-             bin_count_in_hash_length];
-    int entity_count_currently_in_bin[bin_count_in_hash_width *
-                                      bin_count_in_hash_height *
+        AABB[bin_count_in_hash_width * hash_height * bin_count_in_hash_length];
+    int entity_count_currently_in_bin[bin_count_in_hash_width * hash_height *
                                       bin_count_in_hash_length];
-
-    // Determine the bin index of each entity AABB bin.
-    // auto p_aabb_bin_index = new (std::nothrow) int[bins_cube_volume];
 
     for (int i = 0; i < p_entities->size(); i++) {
         AABB& this_aabb = p_entities->aabbs[i];
 
         // Get the cells that this AABB fits into.
         int min_x_index = this_aabb.min_point.x / single_bin_size;
-        int min_y_index = this_aabb.min_point.y / single_bin_size;
+        int min_y_index =
+            (this_aabb.min_point.y + view_height) / single_bin_size;
         int min_z_index = this_aabb.min_point.z / single_bin_size;
 
         int max_x_index = this_aabb.max_point.x / single_bin_size;
-        int max_y_index = this_aabb.max_point.y / single_bin_size;
+        int max_y_index =
+            (this_aabb.max_point.y + view_height) / single_bin_size;
         int max_z_index = this_aabb.max_point.z / single_bin_size;
 
         // Skip this entity if it is outside the view bounds.
@@ -172,7 +173,7 @@ auto main() -> int {
         // operations.
         if (min_x_index < 0 || min_y_index < 0 || min_z_index < 0 ||
             max_x_index > bin_count_in_hash_width ||
-            max_y_index > bin_count_in_hash_height ||
+            max_y_index > hash_height ||
             max_z_index > bin_count_in_hash_width) {
             break;
         }
@@ -184,7 +185,6 @@ auto main() -> int {
                      bin_z += 1) {
                     p_aabb_bins[index_into_view_hash(bin_x, bin_y, bin_z)] =
                         this_aabb;
-
                     p_aabb_count_in_bin[index_into_view_hash(bin_x, bin_y,
                                                              bin_z)] += 1;
                     p_aabb_index_to_entity_index_map[index_into_view_hash(
@@ -219,21 +219,20 @@ auto main() -> int {
                 .direction_inverse =
                     {
                         .x = 0,
-                        .y = 1,   // -1 / -1
-                        .z = -1,  // 1 / -1
+                        .y = -1,  // 1 / -1
+                        .z = 1,   // 1 / 1
                     },
             };
 
-            Pixel background_color = {35, 35, 25};
+            Pixel background_color = {35, 100, 25};
 
             int bin_x = static_cast<short>(i / single_bin_size);
 
-            // `k` is a ray's world-position casting forwards.
-            for (short k = 0; k < bin_count_in_hash_length * single_bin_size;
-                 k++) {
-                int bin_z = static_cast<short>(k / single_bin_size);
-                int bin_y = static_cast<short>(bin_count_in_hash_height -
-                                               (j / single_bin_size));
+            // `k` is a ray's hash-space position casting forwards.
+            for (short k = 0; k < bin_count_in_hash_length; k++) {
+                int bin_z = k;
+                int bin_y =
+                    static_cast<short>(hash_height - (j / single_bin_size)) - k;
 
                 // short closest_entity_depth =
                 // std::numeric_limits<short>::max();
@@ -261,18 +260,19 @@ auto main() -> int {
                                                [index_into_view_hash(
                                                    bin_x, bin_y, bin_z)]];
 
-                    // Intersect ray with this aabb.
-                    if (this_aabb.intersect(this_ray)) {
-                        background_color =
-                            p_entities->colors[p_aabb_index_to_entity_index_map
-                                                   [index_into_view_hash(
-                                                       bin_x, bin_y, bin_z)]];
-                        break;
+                    // // Intersect ray with this aabb.
+                    // if (this_aabb.intersect(this_ray)) {
+                    //     background_color =
+                    //         p_entities->colors[p_aabb_index_to_entity_index_map
+                    //                                [index_into_view_hash(
+                    //                                    bin_x, bin_y,
+                    //                                    bin_z)]];
+                    //     break;
 
-                        // TODO: Update `closest_entity_depth`.
-                        // TODO: Kill ray after intersecting with any AABBs
-                        // in a bin.
-                    }
+                    //     // TODO: Update `closest_entity_depth`.
+                    //     // TODO: Kill ray after intersecting with any AABBs
+                    //     // in a bin.
+                    // }
                 }
             }
 
@@ -286,9 +286,6 @@ auto main() -> int {
         std::cout << "Row " << j << ": ";
         for (int i = 0; i < view_width; i++) {
             int col = p_texture[j * view_width + i].blue;
-            if (col == 25) {
-                col = 0;
-            }
             std::cout << std::to_string(col) << ' ';
         }
         std::cout << "\n\n";
@@ -309,14 +306,19 @@ auto main() -> int {
         SDL_CreateTexture(p_renderer, SDL_PIXELFORMAT_RGB888,
                           SDL_TEXTUREACCESS_STREAMING, view_width, view_height);
 
-    // `texture_row_size` is required by `SDL_LockTexture`, but it isn't used
-    // for anything interesting.
-    int texture_row_size;
+    int texture_pitch;
     void* p_blit = new (std::nothrow) Pixel[view_width * view_height];
-    SDL_LockTexture(p_sdl_texture, nullptr, &p_blit, &texture_row_size);
-    memcpy(p_blit, p_texture, view_width * view_height * sizeof(Pixel));
+    SDL_LockTexture(p_sdl_texture, nullptr, &p_blit, &texture_pitch);
+    for (int row = 0; row < view_height; row++) {
+        memset(static_cast<char*>(p_blit) + row * texture_pitch, 122, 1920);
+        memcpy(static_cast<char*>(p_blit) + row * texture_pitch,
+               p_texture + row * view_width, view_width * sizeof(Pixel));
+    }
     SDL_UnlockTexture(p_sdl_texture);
 
+    SDL_Rect view_rect = {0, 0, view_width, view_height};
+    SDL_Rect blit_rect = {0, 0, static_cast<int>(texture_pitch / sizeof(Pixel)),
+                          view_height};
     while (true) {
         SDL_Event e;
         if (SDL_PollEvent(&e)) {
@@ -325,7 +327,9 @@ auto main() -> int {
             }
         }
 
-        SDL_RenderCopy(p_renderer, p_sdl_texture, nullptr, nullptr);
+        SDL_RenderClear(p_renderer);
+        SDL_RenderCopy(p_renderer, p_sdl_texture, &view_rect, &blit_rect);
+        // SDL_RenderDrawRect(p_renderer, &view_rect);
         SDL_RenderPresent(p_renderer);
     }
 
