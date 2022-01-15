@@ -218,7 +218,6 @@ auto main() -> int {
                 // The direction in hash-space is <0, 1, 1>
                 .direction_inverse =
                     {
-                        // TODO: This might not work ..
                         .x = 0,
                         .y = 1,   // -1 / -1
                         .z = -1,  // 1 / -1
@@ -262,6 +261,7 @@ auto main() -> int {
                     // TODO: If this entity has closer depth.
                     // if (this_aabb.min_point.y + (j - this_aabb.min_point.y) >
                     // closest_entity_depth) {
+                    // }
 
                     // TODO: Remove this:
                     background_color =
@@ -276,16 +276,16 @@ auto main() -> int {
                                                    [index_into_view_hash(
                                                        bin_x, bin_y, bin_z)]];
                         break;
+
                         // TODO: Update `closest_entity_depth`.
-                        // TODO: Kill ray after intersecting with any AABBs in a
-                        // bin.
+                        // TODO: Kill ray after intersecting with any AABBs
+                        // in a bin.
                     }
-                    // }
                 }
 
                 // `j` and `k` increase as the cursor moves downwards.
                 // `i` increases as the cursor moves rightwards.
-                p_texture[(j + k) * view_width + i] = background_color;
+                p_texture[j * view_width + i] = background_color;
             }
         }
 break_pixel:
@@ -322,7 +322,7 @@ break_pixel:
     // `texture_row_size` is required by `SDL_LockTexture`, but it isn't used
     // for anything interesting.
     int texture_row_size;
-    void* p_blit = new (std::nothrow) Pixel[view_height * view_width];
+    void* p_blit = new (std::nothrow) Pixel[view_width * view_height];
     SDL_LockTexture(p_sdl_texture, nullptr, &p_blit, &texture_row_size);
     memcpy(p_blit, p_texture, view_width * view_height * sizeof(Pixel));
     SDL_UnlockTexture(p_sdl_texture);
