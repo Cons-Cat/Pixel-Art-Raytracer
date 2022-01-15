@@ -1,5 +1,6 @@
 #include <liblava/lava.hpp>
 
+#include <SDL2/SDL.h>
 #include <concepts>
 #include <cstdint>
 #include <iostream>
@@ -269,18 +270,34 @@ break_ray:
         continue;
     }
 
-    for (int j = 0; j < 320; j++) {
-        std::cout << "Row " << j << ": ";
-        for (int i = 0; i < 480; i++) {
-            // std::cout << "Column: " << i << ": ";
-            std::cout << std::to_string(p_texture[j * 480 + i].blue) << ' ';
-        }
-        std::cout << "\n\n";
-    }
+    // for (int j = 0; j < 320; j++) {
+    //     std::cout << "Row " << j << ": ";
+    //     for (int i = 0; i < 480; i++) {
+    //         // std::cout << "Column: " << i << ": ";
+    //         std::cout << std::to_string(p_texture[j * 480 + i].blue) << ' ';
+    //     }
+    //     std::cout << "\n\n";
+    // }
 
     // TODO: Make a trivial pass-through graphics shader pipeline in Vulkan to
     // render texture.
     delete[] p_aabb_bins;
+
+    SDL_Init(SDL_INIT_VIDEO);
+
+    SDL_Window* p_window =
+        SDL_CreateWindow("alternative", SDL_WINDOWPOS_UNDEFINED,
+                         SDL_WINDOWPOS_UNDEFINED, view_width, view_height, 0);
+    SDL_Renderer* p_renderer =
+        SDL_CreateRenderer(p_window, -1, SDL_RENDERER_SOFTWARE);
+    SDL_SetRenderDrawColor(p_renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
+    SDL_RenderClear(p_renderer);
+    SDL_RenderPresent(p_renderer);
+
+    SDL_Delay(3000);
+
+    SDL_DestroyWindow(p_window);
+    SDL_Quit();
 }
 
 /* Create an entity.

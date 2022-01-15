@@ -25,9 +25,13 @@ target_link_libraries(reference PRIVATE lava::app)
 target_sources(reference PRIVATE
   src/shared_behavior.hpp)
 
+find_package(SDL2 REQUIRED)
+include_directories(${SDL2_INCLUDE_DIRS})
+
 project(alternative)
 add_executable(alternative src/alternative.cpp)
 target_compile_definitions(alternative PRIVATE Release=$<CONFIG:Release>)
 target_link_libraries(alternative PRIVATE lava::app)
+target_link_libraries(alternative PRIVATE ${SDL2_LIBRARIES})
 target_sources(alternative PRIVATE
   src/shared_behavior.hpp)
