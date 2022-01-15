@@ -1,6 +1,9 @@
 #include <liblava/lava.hpp>
 
 #include <SDL2/SDL.h>
+#include <SDL2/SDL_render.h>
+#include <SDL2/SDL_surface.h>
+#include <SDL2/SDL_video.h>
 #include <concepts>
 #include <cstdint>
 #include <iostream>
@@ -224,7 +227,7 @@ auto main() -> int {
                     goto break_ray;
                 }
 
-                Pixel background_color = {0, 0, 0};
+                Pixel background_color = {25, 25, 25};
                 short closest_entity_depth = std::numeric_limits<short>::max();
 
                 int entities_in_this_bin =
@@ -262,7 +265,6 @@ auto main() -> int {
                     // }
                 }
 
-                // TODO: Image must be flipped.
                 p_texture[(j + k) * view_width + i] = background_color;
             }
         }
@@ -281,23 +283,39 @@ break_ray:
 
     // TODO: Make a trivial pass-through graphics shader pipeline in Vulkan to
     // render texture.
-    delete[] p_aabb_bins;
 
-    SDL_Init(SDL_INIT_VIDEO);
+    SDL_InitSubSystem(SDL_INIT_VIDEO);
 
     SDL_Window* p_window =
         SDL_CreateWindow("alternative", SDL_WINDOWPOS_UNDEFINED,
                          SDL_WINDOWPOS_UNDEFINED, view_width, view_height, 0);
     SDL_Renderer* p_renderer =
         SDL_CreateRenderer(p_window, -1, SDL_RENDERER_SOFTWARE);
-    SDL_SetRenderDrawColor(p_renderer, 0, 0, 0, SDL_ALPHA_OPAQUE);
-    SDL_RenderClear(p_renderer);
+
+    SDL_Texture* p_sdl_texture =
+        SDL_CreateTexture(p_renderer, SDL_PIXELFORMAT_RGB888,
+                          SDL_TEXTUREACCESS_STREAMING, view_width, view_height);
+
+    // This must be mutable for `SDL_LockTexture()`. `const_cast<>()` doesn't
+    // work here.
+    int mutable_view_width = view_width;
+    void* p_blit = new (std::nothrow) Pixel[view_height * view_width];
+    SDL_LockTexture(p_sdl_texture, nullptr, &p_blit, &mutable_view_width);
+    memcpy(p_blit, p_texture, view_width * view_height * sizeof(Pixel));
+    SDL_UnlockTexture(p_sdl_texture);
+
+    SDL_RenderCopy(p_renderer, p_sdl_texture, nullptr, nullptr);
     SDL_RenderPresent(p_renderer);
 
     SDL_Delay(3000);
 
+    SDL_UnlockTexture(p_sdl_texture);
+    SDL_DestroyTexture(p_sdl_texture);
     SDL_DestroyWindow(p_window);
+    SDL_DestroyRenderer(p_renderer);
     SDL_Quit();
+
+    delete[] p_aabb_bins;
 }
 
 /* Create an entity.
