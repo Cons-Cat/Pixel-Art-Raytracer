@@ -23,7 +23,7 @@ struct Ray {
     Point<short> direction_inverse;
 };
 
-struct AABB {
+struct alignas(16) AABB {
     Point<short> min_point;
     Point<short> max_point;
 
@@ -60,7 +60,7 @@ struct AABB {
 };
 
 // Alignment pads this out from 12 bytes to 16.
-// static_assert(sizeof(AABB) == 16);
+static_assert(sizeof(AABB) == 16);
 
 struct Pixel {
     unsigned char red, green, blue, alpha;
