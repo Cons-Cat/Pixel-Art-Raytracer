@@ -63,7 +63,7 @@ struct AABB {
 // static_assert(sizeof(AABB) == 16);
 
 struct Pixel {
-    unsigned char red, green, blue;
+    unsigned char red, green, blue, alpha;
 };
 
 template <int entity_count>
@@ -319,6 +319,7 @@ auto main() -> int {
     SDL_Rect view_rect = {0, 0, view_width, view_height};
     SDL_Rect blit_rect = {0, 0, static_cast<int>(texture_pitch / sizeof(Pixel)),
                           view_height};
+
     while (true) {
         SDL_Event e;
         if (SDL_PollEvent(&e)) {
@@ -329,7 +330,6 @@ auto main() -> int {
 
         SDL_RenderClear(p_renderer);
         SDL_RenderCopy(p_renderer, p_sdl_texture, &view_rect, &blit_rect);
-        // SDL_RenderDrawRect(p_renderer, &view_rect);
         SDL_RenderPresent(p_renderer);
     }
 
