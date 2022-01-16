@@ -265,13 +265,17 @@ auto main() -> int {
                     // }
 
                     // Intersect ray with this aabb.
-                    if (this_aabb.intersect(this_ray)) {
-                        background_color =
-                            p_entities->colors[p_aabb_index_to_entity_index_map
-                                                   [index_into_view_hash(
-                                                       bin_x, bin_y, bin_z)]];
-                        // TODO: Update `closest_entity_depth`.
-                        has_intersected = true;
+                    if (this_aabb.min_point.x <= i &&
+                        this_aabb.max_point.x >= i) {
+                        if (this_aabb.intersect(this_ray)) {
+                            background_color =
+                                p_entities
+                                    ->colors[p_aabb_index_to_entity_index_map
+                                                 [index_into_view_hash(
+                                                     bin_x, bin_y, bin_z)]];
+                            // TODO: Update `closest_entity_depth`.
+                            has_intersected = true;
+                        }
                     }
                 }
 
