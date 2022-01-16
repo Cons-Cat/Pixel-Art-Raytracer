@@ -31,37 +31,45 @@ struct alignas(16) AABB {
     auto intersect(Ray& ray) -> bool {
         // Adapted from Fast, Branchless Ray/Bounding Box Intersections:
         // https://tavianator.com/2011/ray_box.html X plane comparisons.
+        short min_distance = std::numeric_limits<short>::min();
+        short max_distance = std::numeric_limits<short>::max();
 
         // X plane comparisons.
-        short intersect_x_1 = static_cast<short>((min_point.x - ray.origin.x) *
-                                                 ray.direction_inverse.x);
-        short intersect_x_2 = static_cast<short>((max_point.x - ray.origin.x) *
-                                                 ray.direction_inverse.x);
-        short min_distance = std::min(intersect_x_1, intersect_x_2);
-        short max_distance = std::max(intersect_x_1, intersect_x_2);
+        if (ray.direction_inverse.x != 0) {
+            short intersect_x_1 =
+                static_cast<short>((min_point.x - ray.origin.x));
+            short intersect_x_2 =
+                static_cast<short>((max_point.x - ray.origin.x));
+            min_distance = std::min(intersect_x_1, intersect_x_2);
+            max_distance = std::max(intersect_x_1, intersect_x_2);
+        }
 
         // Y plane comparisons.
-        short intersect_y_1 = static_cast<short>((min_point.y - ray.origin.y) *
-                                                 ray.direction_inverse.y);
-        short intersect_y_2 = static_cast<short>((max_point.y - ray.origin.y) *
-                                                 ray.direction_inverse.y);
-        min_distance =
-            std::max(min_distance, std::min(intersect_y_1, intersect_y_2));
-        max_distance =
-            std::min(max_distance, std::max(intersect_y_1, intersect_y_2));
+        if (ray.direction_inverse.y != 0) {
+            short intersect_y_1 = static_cast<short>(
+                (min_point.y - ray.origin.y) * ray.direction_inverse.y);
+            short intersect_y_2 = static_cast<short>(
+                (max_point.y - ray.origin.y) * ray.direction_inverse.y);
+            min_distance =
+                std::max(min_distance, std::min(intersect_y_1, intersect_y_2));
+            max_distance =
+                std::min(max_distance, std::max(intersect_y_1, intersect_y_2));
+        }
 
         // Z plane comparisons.
-        short intersect_z_1 = static_cast<short>((min_point.z - ray.origin.z) *
-                                                 ray.direction_inverse.z);
-        short intersect_z_2 = static_cast<short>((max_point.z - ray.origin.z) *
-                                                 ray.direction_inverse.z);
-        min_distance =
-            std::max(min_distance, std::min(intersect_z_1, intersect_z_2));
-        max_distance =
-            std::min(max_distance, std::max(intersect_z_1, intersect_z_2));
+        if (ray.direction_inverse.z != 0) {
+            short intersect_z_1 = static_cast<short>(
+                (min_point.z - ray.origin.z) * ray.direction_inverse.z);
+            short intersect_z_2 = static_cast<short>(
+                (max_point.z - ray.origin.z) * ray.direction_inverse.z);
+            min_distance =
+                std::max(min_distance, std::min(intersect_z_1, intersect_z_2));
+            max_distance =
+                std::min(max_distance, std::max(intersect_z_1, intersect_z_2));
+        }
 
-        return max_distance >= min_distance;
         // return max_distance >= std::max<short>(0, min_distance);
+        return max_distance >= min_distance;
         // && min_distance < ray.length;
     }
 };
@@ -102,17 +110,16 @@ struct Entities {
 constexpr short single_bin_size = 20;
 constexpr int view_width = 480;
 constexpr int view_height = 320;
-constexpr int bin_count_in_hash_width = view_width / single_bin_size;
+constexpr int hash_width = view_width / single_bin_size;
 // You can see bins as low along Y as the height of the view window.
 constexpr int hash_height = view_height * 2 / single_bin_size;
-constexpr int bin_count_in_hash_length = view_height / single_bin_size;
+constexpr int hash_length = view_height / single_bin_size;
 
 // The spatial hash is organized near-to-far, by bottom-to-top, by
 // left-to-right.
 // That is generally a cache-friendly layout for this data.
 auto index_into_view_hash(int x, int y, int z) -> int {
-    return (x * hash_height * bin_count_in_hash_length) +
-           (y * bin_count_in_hash_length) + z;
+    return (x * hash_height * hash_length) + (y * hash_length) + z;
 }
 
 auto main() -> int {
@@ -137,17 +144,16 @@ auto main() -> int {
             .aabb = {.min_point = {static_cast<short>(new_position.x),
                                    static_cast<short>(new_position.y),
                                    static_cast<short>(new_position.z)},
-                     .max_point = {static_cast<short>(new_position.x + 10),
-                                   static_cast<short>(new_position.y + 10),
-                                   static_cast<short>(new_position.z + 10)}},
+                     .max_point = {static_cast<short>(new_position.x + 20),
+                                   static_cast<short>(new_position.y + 20),
+                                   static_cast<short>(new_position.z + 20)}},
             .position = new_position,
             .color = {static_cast<unsigned char>(rand() % 255u),
                       static_cast<unsigned char>(rand() % 255u), 255u},
         });
     }
 
-    int hash_cube_volume =
-        bin_count_in_hash_width * hash_height * bin_count_in_hash_length;
+    int hash_cube_volume = hash_width * hash_height * hash_length;
 
     // p_entities is random-access, but the bins they're stored into are not, so
     // we must store a random-access map to the entities' attributes.
@@ -157,10 +163,9 @@ auto main() -> int {
     // Track how many entities fit into each bin.
     auto p_aabb_count_in_bin = new (std::nothrow) int[hash_cube_volume];
 
-    auto p_aabb_bins = new (std::nothrow)
-        AABB[bin_count_in_hash_width * hash_height * bin_count_in_hash_length];
-    int entity_count_currently_in_bin[bin_count_in_hash_width * hash_height *
-                                      bin_count_in_hash_length];
+    auto p_aabb_bins =
+        new (std::nothrow) AABB[hash_width * hash_height * hash_length];
+    int entity_count_currently_in_bin[hash_width * hash_height * hash_length];
 
     for (int i = 0; i < p_entities->size(); i++) {
         AABB& this_aabb = p_entities->aabbs[i];
@@ -180,9 +185,8 @@ auto main() -> int {
         // TODO: Make this comparison is world-space before the division
         // operations.
         if (min_x_index < 0 || min_y_index < 0 || min_z_index < 0 ||
-            max_x_index > bin_count_in_hash_width ||
-            max_y_index > hash_height ||
-            max_z_index > bin_count_in_hash_width) {
+            max_x_index > hash_width || max_y_index > hash_height ||
+            max_z_index > hash_width) {
             break;
         }
 
@@ -236,13 +240,11 @@ auto main() -> int {
             int bin_x = static_cast<short>(i / single_bin_size);
 
             // `k` is a ray's hash-space position casting forwards.
-            for (short k = 0; k < bin_count_in_hash_length; k++) {
+            for (short k = 0; k < hash_length; k++) {
                 int bin_z = k;
                 // Y decreases as Z increases.
                 int bin_y =
                     static_cast<short>(hash_height - (j / single_bin_size)) - k;
-
-                // this_ray.length = k * single_bin_size * 2;
 
                 // short closest_entity_depth =
                 // std::numeric_limits<short>::max();
@@ -292,6 +294,19 @@ auto main() -> int {
         }
     }
 
+    // Draw hash grid.
+    for (int i = 0; i < view_width; i += 1) {
+        for (int j = 0; j < view_height; j += single_bin_size) {
+            p_texture[j * view_width + i] = {0, 0, 0};
+        }
+    }
+    for (int i = 0; i < view_width; i += single_bin_size) {
+        for (int j = 0; j < view_height; j += 1) {
+            p_texture[j * view_width + i] = {0, 0, 0};
+        }
+    }
+
+    // Print ASCII representation.
     for (int j = 0; j < view_height; j++) {
         std::cout << "Row " << j << ": ";
         for (int i = 0; i < view_width; i++) {
