@@ -149,7 +149,8 @@ auto main() -> int {
                                    static_cast<short>(new_position.z + 20)}},
             .position = new_position,
             .color = {static_cast<unsigned char>(rand() % 255u),
-                      static_cast<unsigned char>(rand() % 255u), 255u},
+                      static_cast<unsigned char>(rand() % 255u),
+                      static_cast<unsigned char>(255u)},
         });
     }
 
@@ -157,13 +158,13 @@ auto main() -> int {
 
     // p_entities is random-access, but the bins they're stored into are not, so
     // we must store a random-access map to the entities' attributes.
-    auto p_aabb_index_to_entity_index_map =
+    int* p_aabb_index_to_entity_index_map =
         new (std::nothrow) int[hash_cube_volume];
 
     // Track how many entities fit into each bin.
-    auto p_aabb_count_in_bin = new (std::nothrow) int[hash_cube_volume];
+    int* p_aabb_count_in_bin = new (std::nothrow) int[hash_cube_volume];
 
-    auto p_aabb_bins =
+    AABB* p_aabb_bins =
         new (std::nothrow) AABB[hash_width * hash_height * hash_length];
     int entity_count_currently_in_bin[hash_width * hash_height * hash_length];
 
@@ -234,7 +235,7 @@ auto main() -> int {
                     },
             };
 
-            Pixel background_color = {35, 100, 25};
+            Pixel background_color = {55, 55, 55};
             bool has_intersected = false;
 
             int bin_x = static_cast<short>(i / single_bin_size);
