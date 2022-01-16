@@ -19,43 +19,50 @@ struct Point {
 
 struct Ray {
     Point<short> origin;
-    Point<short> direction;
     Point<short> direction_inverse;
+    // int length;
 };
+static_assert(sizeof(Ray) == 12);
 
 struct alignas(16) AABB {
     Point<short> min_point;
     Point<short> max_point;
 
-    auto get_center() -> Point<short> {
-        // TODO: Remove these casts.
-        return Point<short>{
-            .x = static_cast<short>((min_point.x + max_point.x) / 2),
-            .y = static_cast<short>((min_point.y + max_point.y) / 2),
-            .z = static_cast<short>((min_point.z + max_point.z) / 2),
-        };
-    }
-
     auto intersect(Ray& ray) -> bool {
-        short distance_x_1 = static_cast<short>((min_point.x - ray.origin.x) *
-                                                ray.direction_inverse.x);
-        short distance_x_2 = static_cast<short>((max_point.x - ray.origin.x) *
-                                                ray.direction_inverse.x);
+        // Adapted from Fast, Branchless Ray/Bounding Box Intersections:
+        // https://tavianator.com/2011/ray_box.html X plane comparisons.
 
-        short min_distance = std::min(distance_x_1, distance_x_2);
-        short max_distance = std::max(distance_x_1, distance_x_2);
+        // X plane comparisons.
+        short intersect_x_1 = static_cast<short>((min_point.x - ray.origin.x) *
+                                                 ray.direction_inverse.x);
+        short intersect_x_2 = static_cast<short>((max_point.x - ray.origin.x) *
+                                                 ray.direction_inverse.x);
+        short min_distance = std::min(intersect_x_1, intersect_x_2);
+        short max_distance = std::max(intersect_x_1, intersect_x_2);
 
-        short distance_y_1 = static_cast<short>((min_point.y - ray.origin.y) *
-                                                ray.direction_inverse.y);
-        short distance_y_2 = static_cast<short>((max_point.y - ray.origin.y) *
-                                                ray.direction_inverse.y);
-
+        // Y plane comparisons.
+        short intersect_y_1 = static_cast<short>((min_point.y - ray.origin.y) *
+                                                 ray.direction_inverse.y);
+        short intersect_y_2 = static_cast<short>((max_point.y - ray.origin.y) *
+                                                 ray.direction_inverse.y);
         min_distance =
-            std::max(min_distance, std::min(distance_y_1, distance_y_2));
+            std::max(min_distance, std::min(intersect_y_1, intersect_y_2));
         max_distance =
-            std::min(max_distance, std::max(distance_y_1, distance_y_2));
+            std::min(max_distance, std::max(intersect_y_1, intersect_y_2));
+
+        // Z plane comparisons.
+        short intersect_z_1 = static_cast<short>((min_point.z - ray.origin.z) *
+                                                 ray.direction_inverse.z);
+        short intersect_z_2 = static_cast<short>((max_point.z - ray.origin.z) *
+                                                 ray.direction_inverse.z);
+        min_distance =
+            std::max(min_distance, std::min(intersect_z_1, intersect_z_2));
+        max_distance =
+            std::min(max_distance, std::max(intersect_z_1, intersect_z_2));
 
         return max_distance >= min_distance;
+        // return max_distance >= std::max<short>(0, min_distance);
+        // && min_distance < ray.length;
     }
 };
 
@@ -112,26 +119,27 @@ auto main() -> int {
     constexpr int entity_count = 20;
     auto p_entities = new (std::nothrow) Entities<entity_count>;
 
-    srand(time(NULL));
+    // srand(time(NULL));
 
     for (int i = 0; i < p_entities->size(); i++) {
         // Place entities, in world-space, randomly throughout a cube which
         // bounds the orthographic view frustrum, assuming the camera is at
         // <0,0,0>.
         int x = (rand() % (view_width));
+        // Y is between +`view_height` and -`view_height`.
         int y = (rand() % (view_height * 2)) - view_height;
         int z = (rand() % (view_height));
 
         Point<int> new_position = {x, y, z};
 
-        // An AABB's volume is currently hard-coded to 20^3.
+        // An AABB's volume is currently hard-coded to 10^3.
         p_entities->insert({
             .aabb = {.min_point = {static_cast<short>(new_position.x),
                                    static_cast<short>(new_position.y),
                                    static_cast<short>(new_position.z)},
-                     .max_point = {static_cast<short>(new_position.x + 20),
-                                   static_cast<short>(new_position.y + 20),
-                                   static_cast<short>(new_position.z + 20)}},
+                     .max_point = {static_cast<short>(new_position.x + 10),
+                                   static_cast<short>(new_position.y + 10),
+                                   static_cast<short>(new_position.z + 10)}},
             .position = new_position,
             .color = {static_cast<unsigned char>(rand() % 255u),
                       static_cast<unsigned char>(rand() % 255u), 255u},
@@ -214,8 +222,6 @@ auto main() -> int {
                         .y = static_cast<short>(view_height - j),
                         .z = 0,
                     },
-                // The direction in world-space is <0, -1, 1>
-                // The direction in hash-space is <0, 1, 1>
                 .direction_inverse =
                     {
                         .x = 0,
@@ -225,14 +231,18 @@ auto main() -> int {
             };
 
             Pixel background_color = {35, 100, 25};
+            bool has_intersected = false;
 
             int bin_x = static_cast<short>(i / single_bin_size);
 
             // `k` is a ray's hash-space position casting forwards.
             for (short k = 0; k < bin_count_in_hash_length; k++) {
                 int bin_z = k;
+                // Y decreases as Z increases.
                 int bin_y =
                     static_cast<short>(hash_height - (j / single_bin_size)) - k;
+
+                // this_ray.length = k * single_bin_size * 2;
 
                 // short closest_entity_depth =
                 // std::numeric_limits<short>::max();
@@ -254,25 +264,21 @@ auto main() -> int {
                     // closest_entity_depth) {
                     // }
 
-                    // TODO: Remove this:
-                    background_color =
-                        p_entities->colors[p_aabb_index_to_entity_index_map
-                                               [index_into_view_hash(
-                                                   bin_x, bin_y, bin_z)]];
+                    // Intersect ray with this aabb.
+                    if (this_aabb.intersect(this_ray)) {
+                        background_color =
+                            p_entities->colors[p_aabb_index_to_entity_index_map
+                                                   [index_into_view_hash(
+                                                       bin_x, bin_y, bin_z)]];
+                        // TODO: Update `closest_entity_depth`.
+                        has_intersected = true;
+                    }
+                }
 
-                    // // Intersect ray with this aabb.
-                    // if (this_aabb.intersect(this_ray)) {
-                    //     background_color =
-                    //         p_entities->colors[p_aabb_index_to_entity_index_map
-                    //                                [index_into_view_hash(
-                    //                                    bin_x, bin_y,
-                    //                                    bin_z)]];
-                    //     break;
-
-                    //     // TODO: Update `closest_entity_depth`.
-                    //     // TODO: Kill ray after intersecting with any AABBs
-                    //     // in a bin.
-                    // }
+                // Do not bother tracing this ray further if something has
+                // already intersected.
+                if (has_intersected) {
+                    break;
                 }
             }
 
