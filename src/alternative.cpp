@@ -333,11 +333,6 @@ auto main() -> int {
         });
     }
 
-    count_entities_in_bins(p_entities, p_aabb_bins, p_aabb_count_in_bin,
-                           p_aabb_index_to_entity_index_map);
-    trace_hash(p_entities, p_aabb_bins, p_aabb_count_in_bin,
-               p_aabb_index_to_entity_index_map, p_texture);
-
     // TODO: Make a trivial pass-through graphics shader pipeline in Vulkan
     // to render texture.
 
@@ -354,18 +349,6 @@ auto main() -> int {
                           SDL_TEXTUREACCESS_STREAMING, view_width, view_height);
 
     void* p_blit = new (std::nothrow) Pixel[view_width * view_height];
-    int texture_pitch;
-    SDL_LockTexture(p_sdl_texture, nullptr, &p_blit, &texture_pitch);
-    for (int row = 0; row < view_height; row++) {
-        memset(static_cast<char*>(p_blit) + row * texture_pitch, 122, 1920);
-        memcpy(static_cast<char*>(p_blit) + row * texture_pitch,
-               p_texture + row * view_width, view_width * sizeof(Pixel));
-    }
-    SDL_UnlockTexture(p_sdl_texture);
-
-    SDL_Rect view_rect = {0, 0, view_width, view_height};
-    SDL_Rect blit_rect = {0, 0, static_cast<int>(texture_pitch / sizeof(Pixel)),
-                          view_height};
 
     while (true) {
         SDL_Event e;
@@ -374,6 +357,24 @@ auto main() -> int {
                 break;
             }
         }
+
+        count_entities_in_bins(p_entities, p_aabb_bins, p_aabb_count_in_bin,
+                               p_aabb_index_to_entity_index_map);
+        trace_hash(p_entities, p_aabb_bins, p_aabb_count_in_bin,
+                   p_aabb_index_to_entity_index_map, p_texture);
+
+        int texture_pitch;
+        SDL_LockTexture(p_sdl_texture, nullptr, &p_blit, &texture_pitch);
+        for (int row = 0; row < view_height; row++) {
+            memset(static_cast<char*>(p_blit) + row * texture_pitch, 122, 1920);
+            memcpy(static_cast<char*>(p_blit) + row * texture_pitch,
+                   p_texture + row * view_width, view_width * sizeof(Pixel));
+        }
+        SDL_UnlockTexture(p_sdl_texture);
+
+        SDL_Rect view_rect = {0, 0, view_width, view_height};
+        SDL_Rect blit_rect = {
+            0, 0, static_cast<int>(texture_pitch / sizeof(Pixel)), view_height};
 
         SDL_RenderClear(p_renderer);
         SDL_RenderCopy(p_renderer, p_sdl_texture, &view_rect, &blit_rect);
