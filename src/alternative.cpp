@@ -111,6 +111,9 @@ constexpr int hash_width = view_width / single_bin_size;
 // You can see bins as low along Y as the height of the view window.
 constexpr int hash_height = view_height * 2 / single_bin_size;
 constexpr int hash_length = view_height / single_bin_size;
+constexpr int hash_cube_volume = hash_width * hash_height * hash_length;
+
+constexpr int entity_count = 20;
 
 // The spatial hash is organized near-to-far, by bottom-to-top, by
 // left-to-right.
@@ -119,65 +122,9 @@ auto index_into_view_hash(int x, int y, int z) -> int {
     return (x * hash_height * hash_length) + (y * hash_length) + z;
 }
 
-auto main() -> int {
-    constexpr int entity_count = 20;
-    auto p_entities = new (std::nothrow) Entities<entity_count>;
-
-    srand(time(0));
-
-    for (int i = 0; i < p_entities->size(); i++) {
-        // Place entities, in world-space, randomly throughout a cube which
-        // bounds the orthographic view frustrum, assuming the camera is at
-        // <0,0,0>.
-        int x = (rand() % (view_width));
-        // Y is between `+view_height` and `-view_height`.
-        int y = (rand() % (view_height * 2)) - view_height;
-        int z = (rand() % (view_height));
-
-        Point<int> new_position = {x, y, z};
-
-        // An AABB's volume is currently hard-coded to 10^3.
-        p_entities->insert({
-            .aabb = {.min_point = {static_cast<short>(new_position.x),
-                                   static_cast<short>(new_position.y),
-                                   static_cast<short>(new_position.z)},
-                     .max_point = {static_cast<short>(new_position.x + 20),
-                                   static_cast<short>(new_position.y + 20),
-                                   static_cast<short>(new_position.z + 20)}},
-            .position = new_position,
-
-            // Randomize colors:
-            .color = {static_cast<unsigned char>(rand()),
-                      static_cast<unsigned char>(rand()),
-                      static_cast<unsigned char>(255u)},
-
-            // Visualize Y coordinates:
-            // .color = {static_cast<unsigned char>((y + view_height) /
-            //                                      (view_height * 2.f) *
-            //                                      255.f),
-            //           static_cast<unsigned char>((y + view_height) /
-            //                                      (view_height * 2.f) *
-            //                                      255.f),
-            //           static_cast<unsigned char>((y + view_height) /
-            //                                      (view_height * 2.f) *
-            //                                      255.f)},
-        });
-    }
-
-    int hash_cube_volume = hash_width * hash_height * hash_length;
-
-    // p_entities is random-access, but the bins they're stored into are not, so
-    // we must store a random-access map to the entities' attributes.
-    int* p_aabb_index_to_entity_index_map =
-        new (std::nothrow) int[hash_cube_volume];
-
-    // Track how many entities fit into each bin.
-    int* p_aabb_count_in_bin = new (std::nothrow) int[hash_cube_volume];
-
-    AABB* p_aabb_bins =
-        new (std::nothrow) AABB[hash_width * hash_height * hash_length];
-    int entity_count_currently_in_bin[hash_width * hash_height * hash_length];
-
+void count_entities_in_bins(Entities<entity_count>* p_entities,
+                            AABB* p_aabb_bins, int* p_aabb_count_in_bin,
+                            int* p_aabb_index_to_entity_index_map) {
     for (int i = 0; i < p_entities->size(); i++) {
         AABB& this_aabb = p_entities->aabbs[i];
 
@@ -221,14 +168,16 @@ auto main() -> int {
             }
         }
     }
+};
 
+void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
+                int* p_aabb_count_in_bin, int* p_aabb_index_to_entity_index_map,
+                Pixel* p_texture) {
     Point<short> ray_direction = {
         .x = 0,
         .y = -1,
         .z = 1,
     };
-
-    Pixel* p_texture = new (std::nothrow) Pixel[view_height * view_width];
 
     // `i` is a ray's world-position lateral to the ground, iterating
     // rightwards.
@@ -297,8 +246,8 @@ auto main() -> int {
                     }
                 }
 
-                // Do not bother tracing this ray further if something has
-                // already intersected.
+                // Do not bother tracing this ray further if something
+                // has already intersected.
                 if (has_intersected) {
                     break;
                 }
@@ -321,9 +270,76 @@ auto main() -> int {
             p_texture[j * view_width + i] = {0, 0, 0};
         }
     }
+};
 
-    // TODO: Make a trivial pass-through graphics shader pipeline in Vulkan to
-    // render texture.
+auto main() -> int {
+    auto p_entities = new (std::nothrow) Entities<entity_count>;
+
+    // p_entities is random-access, but the bins they're stored into are not, so
+    // we must store a random-access map to the entities' attributes.
+    int* p_aabb_index_to_entity_index_map =
+        new (std::nothrow) int[hash_cube_volume];
+
+    // Track how many entities fit into each bin.
+    int* p_aabb_count_in_bin = new (std::nothrow) int[hash_cube_volume];
+
+    AABB* p_aabb_bins =
+        new (std::nothrow) AABB[hash_width * hash_height * hash_length];
+    int entity_count_currently_in_bin[hash_width * hash_height * hash_length];
+
+    Pixel* p_texture = new (std::nothrow) Pixel[view_height * view_width];
+    if (p_texture == nullptr) {
+        return 1;
+    }
+
+    srand(time(0));
+
+    for (int i = 0; i < p_entities->size(); i++) {
+        // Place entities, in world-space, randomly throughout a cube which
+        // bounds the orthographic view frustrum, assuming the camera is at
+        // <0,0,0>.
+        int x = (rand() % (view_width));
+        // Y is between `+view_height` and `-view_height`.
+        int y = (rand() % (view_height * 2)) - view_height;
+        int z = (rand() % (view_height));
+
+        Point<int> new_position = {x, y, z};
+
+        // An AABB's volume is currently hard-coded to 10^3.
+        p_entities->insert({
+            .aabb = {.min_point = {static_cast<short>(new_position.x),
+                                   static_cast<short>(new_position.y),
+                                   static_cast<short>(new_position.z)},
+                     .max_point = {static_cast<short>(new_position.x + 20),
+                                   static_cast<short>(new_position.y + 20),
+                                   static_cast<short>(new_position.z + 20)}},
+            .position = new_position,
+
+            // Randomize colors:
+            .color = {static_cast<unsigned char>(rand()),
+                      static_cast<unsigned char>(rand()),
+                      static_cast<unsigned char>(255u)},
+
+            // Visualize Y coordinates:
+            // .color = {static_cast<unsigned char>((y + view_height) /
+            //                                      (view_height * 2.f) *
+            //                                      255.f),
+            //           static_cast<unsigned char>((y + view_height) /
+            //                                      (view_height * 2.f) *
+            //                                      255.f),
+            //           static_cast<unsigned char>((y + view_height) /
+            //                                      (view_height * 2.f) *
+            //                                      255.f)},
+        });
+    }
+
+    count_entities_in_bins(p_entities, p_aabb_bins, p_aabb_count_in_bin,
+                           p_aabb_index_to_entity_index_map);
+    trace_hash(p_entities, p_aabb_bins, p_aabb_count_in_bin,
+               p_aabb_index_to_entity_index_map, p_texture);
+
+    // TODO: Make a trivial pass-through graphics shader pipeline in Vulkan
+    // to render texture.
 
     SDL_InitSubSystem(SDL_INIT_VIDEO);
 
@@ -337,8 +353,8 @@ auto main() -> int {
         SDL_CreateTexture(p_renderer, SDL_PIXELFORMAT_RGB888,
                           SDL_TEXTUREACCESS_STREAMING, view_width, view_height);
 
-    int texture_pitch;
     void* p_blit = new (std::nothrow) Pixel[view_width * view_height];
+    int texture_pitch;
     SDL_LockTexture(p_sdl_texture, nullptr, &p_blit, &texture_pitch);
     for (int row = 0; row < view_height; row++) {
         memset(static_cast<char*>(p_blit) + row * texture_pitch, 122, 1920);
