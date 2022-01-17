@@ -322,16 +322,6 @@ auto main() -> int {
         }
     }
 
-    // Print ASCII representation.
-    for (int j = 0; j < view_height; j++) {
-        std::cout << "Row " << j << ": ";
-        for (int i = 0; i < view_width; i++) {
-            int col = p_texture[j * view_width + i].blue;
-            std::cout << std::to_string(col) << ' ';
-        }
-        std::cout << "\n\n";
-    }
-
     // TODO: Make a trivial pass-through graphics shader pipeline in Vulkan to
     // render texture.
 
