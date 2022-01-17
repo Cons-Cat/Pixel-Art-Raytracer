@@ -20,7 +20,6 @@ struct Point {
 struct Ray {
     Point<short> origin;
     Point<short> direction_inverse;
-    // int length;
 };
 static_assert(sizeof(Ray) == 12);
 
@@ -68,9 +67,7 @@ struct alignas(16) AABB {
                 std::min(max_distance, std::max(intersect_z_1, intersect_z_2));
         }
 
-        // return max_distance >= std::max<short>(0, min_distance);
         return max_distance >= min_distance;
-        // && min_distance < ray.length;
     }
 };
 
