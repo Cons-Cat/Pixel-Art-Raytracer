@@ -148,9 +148,22 @@ auto main() -> int {
                                    static_cast<short>(new_position.y + 20),
                                    static_cast<short>(new_position.z + 20)}},
             .position = new_position,
+
+            // Randomize colors:
             .color = {static_cast<unsigned char>(rand() % 255u),
                       static_cast<unsigned char>(rand() % 255u),
                       static_cast<unsigned char>(255u)},
+
+            // Visualize Y coordinates:
+            // .color = {static_cast<unsigned char>((y + view_height) /
+            //                                      (view_height * 2.f) *
+            //                                      255.f),
+            //           static_cast<unsigned char>((y + view_height) /
+            //                                      (view_height * 2.f) *
+            //                                      255.f),
+            //           static_cast<unsigned char>((y + view_height) /
+            //                                      (view_height * 2.f) *
+            //                                      255.f)},
         });
     }
 
@@ -171,25 +184,30 @@ auto main() -> int {
     for (int i = 0; i < p_entities->size(); i++) {
         AABB& this_aabb = p_entities->aabbs[i];
 
-        // Get the cells that this AABB fits into.
-        int min_x_index = this_aabb.min_point.x / single_bin_size;
-        int min_y_index =
-            (this_aabb.min_point.y + view_height) / single_bin_size;
-        int min_z_index = this_aabb.min_point.z / single_bin_size;
-
-        int max_x_index = this_aabb.max_point.x / single_bin_size;
-        int max_y_index =
-            (this_aabb.max_point.y + view_height) / single_bin_size;
-        int max_z_index = this_aabb.max_point.z / single_bin_size;
-
         // Skip this entity if it is outside the view bounds.
-        // TODO: Make this comparison is world-space before the division
-        // operations.
-        if (min_x_index < 0 || min_y_index < 0 || min_z_index < 0 ||
-            max_x_index > hash_width || max_y_index > hash_height ||
-            max_z_index > hash_width) {
+        if ((this_aabb.max_point.x <= 0) ||
+            (this_aabb.min_point.x > view_width) ||
+            (this_aabb.max_point.y <= -view_height) ||
+            (this_aabb.min_point.y > view_height) ||
+            (this_aabb.max_point.z <= 0) ||
+            (this_aabb.min_point.z > view_height)) {
             break;
         }
+
+        // Get the cells that this AABB fits into.
+        int min_x_index = std::max(0, this_aabb.min_point.x / single_bin_size);
+        int min_y_index = std::max(
+            0, (this_aabb.min_point.y + view_height) / single_bin_size);
+        int min_z_index = std::max(0, this_aabb.min_point.z / single_bin_size);
+
+        // TODO: Figure out why `+ 2` is necessary.
+        int max_x_index =
+            std::min(hash_width, this_aabb.max_point.x / single_bin_size + 2);
+        int max_y_index = std::min(
+            hash_height,
+            (this_aabb.max_point.y + view_height) / single_bin_size + 2);
+        int max_z_index =
+            std::min(hash_length, this_aabb.max_point.z / single_bin_size + 2);
 
         // Place this AABB into every bin that it spans across.
         for (int bin_x = min_x_index; bin_x <= max_x_index; bin_x += 1) {
@@ -235,7 +253,7 @@ auto main() -> int {
                     },
             };
 
-            Pixel background_color = {55, 55, 55};
+            Pixel this_color = {55, 55, 55};
             bool has_intersected = false;
 
             int bin_x = static_cast<short>(i / single_bin_size);
@@ -263,15 +281,15 @@ auto main() -> int {
                                     this_bin_entity_index];
 
                     // TODO: If this entity has closer depth.
-                    // if (this_aabb.min_point.y + (j - this_aabb.min_point.y) >
-                    // closest_entity_depth) {
+                    // if (this_aabb.min_point.y + (j -
+                    // this_aabb.min_point.y) > closest_entity_depth) {
                     // }
 
                     // Intersect ray with this aabb.
                     if (this_aabb.min_point.x <= i &&
                         this_aabb.max_point.x >= i) {
                         if (this_aabb.intersect(this_ray)) {
-                            background_color =
+                            this_color =
                                 p_entities
                                     ->colors[p_aabb_index_to_entity_index_map
                                                  [index_into_view_hash(
@@ -291,7 +309,7 @@ auto main() -> int {
 
             // `j` increases as the cursor moves downwards.
             // `i` increases as the cursor moves rightwards.
-            p_texture[j * view_width + i] = background_color;
+            p_texture[j * view_width + i] = this_color;
         }
     }
 
