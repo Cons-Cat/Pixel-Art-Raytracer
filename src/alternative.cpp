@@ -126,14 +126,14 @@ auto main() -> int {
     constexpr int entity_count = 20;
     auto p_entities = new (std::nothrow) Entities<entity_count>;
 
-    // srand(time(NULL));
+    srand(time(0));
 
     for (int i = 0; i < p_entities->size(); i++) {
         // Place entities, in world-space, randomly throughout a cube which
         // bounds the orthographic view frustrum, assuming the camera is at
         // <0,0,0>.
         int x = (rand() % (view_width));
-        // Y is between +`view_height` and -`view_height`.
+        // Y is between `+view_height` and `-view_height`.
         int y = (rand() % (view_height * 2)) - view_height;
         int z = (rand() % (view_height));
 
@@ -150,8 +150,8 @@ auto main() -> int {
             .position = new_position,
 
             // Randomize colors:
-            .color = {static_cast<unsigned char>(rand() % 255u),
-                      static_cast<unsigned char>(rand() % 255u),
+            .color = {static_cast<unsigned char>(rand()),
+                      static_cast<unsigned char>(rand()),
                       static_cast<unsigned char>(255u)},
 
             // Visualize Y coordinates:
@@ -231,7 +231,7 @@ auto main() -> int {
         .z = 1,
     };
 
-    auto p_texture = new (std::nothrow) Pixel[view_height * view_width];
+    Pixel* p_texture = new (std::nothrow) Pixel[view_height * view_width];
 
     // `i` is a ray's world-position lateral to the ground, iterating
     // rightwards.
