@@ -181,12 +181,12 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
     // rightwards.
     for (short i = 0; i < view_width; i++) {
         // `j` is a ray's world-position skywards, iterating downwards.
-        for (short j = 0; j < view_height; j++) {
+        for (short j = view_height - 1; j >= 0; j--) {
             Ray this_ray = {
                 .origin =
                     {
                         .x = i,
-                        .y = static_cast<short>(view_height - j),
+                        .y = j,
                         .z = 0,
                     },
                 .direction_inverse =
@@ -202,8 +202,8 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
 
             // The hash frustrum's data is stored such that increasing the `z`
             // index finds AABBs with proportionally lower `y` coordinates, so
-            // decrementing `y` by `k` here is unnecessary.
-            int bin_x = static_cast<short>(i / single_bin_size);
+            // decrementing `y` by `z` here is unnecessary.
+            int bin_x = i / single_bin_size;
 
             // `bin_z` is a ray's hash-space position casting forwards.
             for (short bin_z = 0; bin_z < hash_length; bin_z++) {
@@ -212,8 +212,8 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                     // `bin_y` represents either bin that a given ray will
                     // intersect along the `y` axis. The ray intersects the
                     // higher bin first, then the lower one.
-                    short bin_y = static_cast<short>(
-                        hash_height - 1 - (j / single_bin_size) - bin_y_offset);
+                    short bin_y = static_cast<short>((j / single_bin_size) -
+                                                     bin_y_offset);
                     if (bin_y < 0) {
                         break;
                     }
@@ -263,9 +263,9 @@ escape_ray:
                 continue;
             }
 
-            // `j` increases as the cursor moves downwards.
+            // `j` decreases as the cursor moves downwards.
             // `i` increases as the cursor moves rightwards.
-            p_texture[j * view_width + i] = this_color;
+            p_texture[(view_height - j) * view_width + i] = this_color;
         }
     }
 
