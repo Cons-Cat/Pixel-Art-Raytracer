@@ -130,8 +130,9 @@ void count_entities_in_bins(Entities<entity_count>* p_entities,
     for (int i = 0; i < p_entities->size(); i++) {
         AABB& this_aabb = p_entities->aabbs[i];
 
+        // The `y` coordinate shifts upwards as `z` increases.
         int this_min_x_world = this_aabb.position.x;
-        int this_min_y_world = this_aabb.position.y;
+        int this_min_y_world = this_aabb.position.y + this_aabb.position.z;
         int this_min_z_world = this_aabb.position.z;
         int this_max_x_world = this_min_x_world + this_aabb.extent.x;
         int this_max_y_world = this_min_y_world + this_aabb.extent.y;
@@ -139,25 +140,20 @@ void count_entities_in_bins(Entities<entity_count>* p_entities,
 
         // Skip this entity if it fits entirely outside of the view bounds.
         if ((this_max_x_world < 0) || (this_min_x_world >= view_width) ||
-            (this_max_y_world < 0 - this_max_z_world) ||
-            (this_min_y_world >= view_height - this_min_z_world) ||
+            (this_max_y_world < 0) || (this_min_y_world >= view_height) ||
             (this_max_z_world < 0) || (this_min_z_world >= view_length)) {
-            break;
+            continue;
         }
 
         // Get the cells that this `AABB` fits into.
-        // The `y` indices shift upwards as `z` increases.
         int min_x_index = std::max(0, this_min_x_world / single_bin_size);
-        int min_y_index =
-            std::max(0, (this_min_y_world + view_height + this_min_z_world) /
-                            single_bin_size);
+        int min_y_index = std::max(0, this_min_y_world / single_bin_size);
         int min_z_index = std::max(0, this_min_z_world / single_bin_size);
 
         int max_x_index =
             std::min(hash_width, this_max_x_world / single_bin_size);
-        int max_y_index = std::min(
-            hash_height, (this_max_y_world + view_height + this_max_z_world) /
-                             single_bin_size);
+        int max_y_index =
+            std::min(hash_height, this_max_y_world / single_bin_size);
         int max_z_index =
             std::min(hash_length, this_max_z_world / single_bin_size);
 
@@ -208,7 +204,8 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
             // index finds AABBs with proportionally lower `y` coordinates, so
             // decrementing `y` by `k` here is unnecessary.
             int bin_x = static_cast<short>(i / single_bin_size);
-            int bin_y = static_cast<short>(hash_height - (j / single_bin_size));
+            int bin_y =
+                static_cast<short>(hash_height - 1 - (j / single_bin_size));
 
             // `k` is a ray's hash-space position casting forwards.
             for (short k = 0; k < hash_length; k++) {
@@ -234,8 +231,8 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                     // }
 
                     // Intersect ray with this aabb.
-                    if (this_aabb.position.x <= i &&
-                        this_aabb.position.x + this_aabb.extent.x >= i) {
+                    if (i >= this_aabb.position.x &&
+                        i < this_aabb.position.x + this_aabb.extent.x) {
                         if (this_aabb.intersect(this_ray)) {
                             this_color =
                                 p_entities
@@ -284,9 +281,9 @@ auto main() -> int {
     // Track how many entities fit into each bin.
     int* p_aabb_count_in_bin = new (std::nothrow) int[hash_volume];
 
-    AABB* p_aabb_bins =
-        new (std::nothrow) AABB[hash_width * hash_height * hash_length];
-    int entity_count_currently_in_bin[hash_width * hash_height * hash_length];
+    AABB* p_aabb_bins = new (std::nothrow) AABB[hash_volume];
+    // int* entity_count_currently_in_bin[hash_volume] = new (std::nothrow)
+    // int[hash_volume];
 
     Pixel* p_texture = new (std::nothrow) Pixel[view_height * view_width];
     if (p_texture == nullptr) {
@@ -299,10 +296,9 @@ auto main() -> int {
         // Place entities, in world-space, randomly throughout a cube which
         // bounds the orthographic view frustrum, assuming the camera is at
         // <0,0,0>.
-        int x = (rand() % (view_width));
-        // Y is between `+view_height` and `-view_height`.
+        int x = (rand() % (view_width * 2)) - view_width;
         int y = (rand() % (view_height * 2)) - view_height;
-        int z = (rand() % (view_length));
+        int z = (rand() % (view_length * 2)) - view_length;
 
         Point<short> new_position = {static_cast<short>(x),
                                      static_cast<short>(y),
@@ -333,7 +329,8 @@ auto main() -> int {
     }
 
     // Place player character near the center.
-    p_entities->aabbs[0].position = {view_width / 2, 10, view_height / 2};
+    p_entities->aabbs[0].position = {view_width / 2, view_height / 2,
+                                     view_length / 2};
 
     // TODO: Make a trivial pass-through graphics shader pipeline in Vulkan
     // to render texture.
