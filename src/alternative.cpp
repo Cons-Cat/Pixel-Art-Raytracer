@@ -109,9 +109,10 @@ struct Entities {
 constexpr short single_bin_size = 20;
 constexpr int view_width = 480;
 constexpr int view_height = 320;
+constexpr int view_length = 320;
 constexpr int hash_width = view_width / single_bin_size;
 constexpr int hash_height = view_height / single_bin_size;
-constexpr int hash_length = view_height / single_bin_size;
+constexpr int hash_length = view_length / single_bin_size;
 constexpr int hash_volume = hash_width * hash_height * hash_length;
 
 constexpr int entity_count = 20;
@@ -136,11 +137,11 @@ void count_entities_in_bins(Entities<entity_count>* p_entities,
         int this_max_y_world = this_min_y_world + this_aabb.extent.y;
         int this_max_z_world = this_min_z_world + this_aabb.extent.z;
 
-        // Skip this entity if it is outside the view bounds.
+        // Skip this entity if it fits entirely outside of the view bounds.
         if ((this_max_x_world < 0) || (this_min_x_world >= view_width) ||
-            (this_max_y_world < -this_max_z_world) ||
+            (this_max_y_world < 0 - this_max_z_world) ||
             (this_min_y_world >= view_height - this_min_z_world) ||
-            (this_max_z_world < 0) || (this_min_z_world >= view_height)) {
+            (this_max_z_world < 0) || (this_min_z_world >= view_length)) {
             break;
         }
 
@@ -301,7 +302,7 @@ auto main() -> int {
         int x = (rand() % (view_width));
         // Y is between `+view_height` and `-view_height`.
         int y = (rand() % (view_height * 2)) - view_height;
-        int z = (rand() % (view_height));
+        int z = (rand() % (view_length));
 
         Point<short> new_position = {static_cast<short>(x),
                                      static_cast<short>(y),
