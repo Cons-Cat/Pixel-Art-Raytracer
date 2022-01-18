@@ -260,7 +260,7 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                     }
                 }
 escape_ray:
-                continue;
+                break;
             }
 
             // `j` decreases as the cursor moves downwards.
