@@ -331,7 +331,7 @@ auto main() -> int {
     }
 
     // Place player character near the center.
-    // p_entities->positions[0] = {view_width / 2, 10, view_height / 2};
+    p_entities->aabbs[0].position = {view_width / 2, 10, view_height / 2};
 
     // TODO: Make a trivial pass-through graphics shader pipeline in Vulkan
     // to render texture.
@@ -365,16 +365,16 @@ auto main() -> int {
                 case SDL_KEYDOWN:
                     switch (event.key.keysym.sym) {
                         case SDLK_LEFT:
-                            // p_entities->positions[0].x -= 10;
+                            p_entities->aabbs[0].position.x -= 10;
                             break;
                         case SDLK_RIGHT:
-                            // p_entities->positions[0].x += 10;
+                            p_entities->aabbs[0].position.x += 10;
                             break;
                         case SDLK_UP:
-                            // p_entities->positions[0].z += 10;
+                            p_entities->aabbs[0].position.z += 10;
                             break;
                         case SDLK_DOWN:
-                            // p_entities->positions[0].z -= 10;
+                            p_entities->aabbs[0].position.z -= 10;
                             break;
                         default:
                             break;
@@ -382,7 +382,6 @@ auto main() -> int {
                     break;
             }
         }
-        // p_entities->positions[0].x -= 1;
 
         memset(p_aabb_count_in_bin, 0, hash_cube_volume * 4);
         count_entities_in_bins(p_entities, p_aabb_bins, p_aabb_count_in_bin,
