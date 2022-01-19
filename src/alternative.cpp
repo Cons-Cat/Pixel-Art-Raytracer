@@ -102,7 +102,7 @@ struct Entities {
     }
 
     auto size() -> int {
-        return entity_count;
+        return last_entity_index;
     }
 };
 
@@ -207,7 +207,7 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
 
             // `bin_z` is a ray's hash-space position casting forwards.
             for (short bin_z = 0; bin_z < hash_length; bin_z++) {
-                for (short bin_y_offset = 0; bin_y_offset <= 1;
+                for (short bin_y_offset = 0; bin_y_offset < 2;
                      bin_y_offset += 1) {
                     // `bin_y` represents either bin that a given ray will
                     // intersect along the `y` axis. The ray intersects the
@@ -226,9 +226,7 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                                                                  bin_z)];
 
                     for (int this_bin_entity_index = 0;
-                         this_bin_entity_index <
-                         p_aabb_count_in_bin[index_into_view_hash(bin_x, bin_y,
-                                                                  bin_z)];
+                         this_bin_entity_index < entities_in_this_bin;
                          this_bin_entity_index++) {
                         AABB& this_aabb = p_aabb_bins[index_into_view_hash(
                                                           bin_x, bin_y, bin_z) +
@@ -286,8 +284,9 @@ escape_ray:
 auto main() -> int {
     auto p_entities = new (std::nothrow) Entities<entity_count>;
 
-    // p_entities is random-access, but the bins they're stored into are not, so
-    // we must store a random-access map to the entities' attributes.
+    // p_entities is random-access, but the bins they're stored into are
+    // not, so we must store a random-access map to the entities'
+    // attributes.
     int* p_aabb_index_to_entity_index_map = new (std::nothrow) int[hash_volume];
 
     // Track how many entities fit into each bin.
@@ -304,7 +303,7 @@ auto main() -> int {
 
     srand(time(0));
 
-    for (int i = 0; i < p_entities->size(); i++) {
+    for (int i = 0; i < entity_count; i++) {
         // Place entities randomly in world-space, localized around <0,0,0>.
         int x = (rand() % (view_width * 2)) - view_width;
         int y = (rand() % (view_height * 2)) - view_height;
@@ -327,14 +326,14 @@ auto main() -> int {
 
             //     // Visualize Y coordinates:
             //     .color = {static_cast<unsigned char>((y + view_height) /
-            //                                          (view_height * 2.f) *
-            //                                          255.f),
+            //                                          (view_height * 2.f)
+            //                                          * 255.f),
             //               static_cast<unsigned char>((y + view_height) /
-            //                                          (view_height * 2.f) *
-            //                                          255.f),
+            //                                          (view_height * 2.f)
+            //                                          * 255.f),
             //               static_cast<unsigned char>((y + view_height) /
-            //                                          (view_height * 2.f) *
-            //                                          255.f)},
+            //                                          (view_height * 2.f)
+            //                                          * 255.f)},
         });
     }
 
