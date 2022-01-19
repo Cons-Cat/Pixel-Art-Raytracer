@@ -132,7 +132,8 @@ void count_entities_in_bins(Entities<entity_count>* p_entities,
 
         // The `y` coordinate shifts upwards as `z` increases.
         int this_min_x_world = this_aabb.position.x;
-        int this_min_y_world = this_aabb.position.y + this_aabb.position.z;
+        int this_min_y_world = this_aabb.position.y;
+        // int this_min_y_world = this_aabb.position.y + this_aabb.position.z;
         int this_min_z_world = this_aabb.position.z;
         int this_max_x_world = this_min_x_world + this_aabb.extent.x;
         int this_max_y_world = this_min_y_world + this_aabb.extent.y;
@@ -140,22 +141,29 @@ void count_entities_in_bins(Entities<entity_count>* p_entities,
 
         // Skip this entity if it fits entirely outside of the view bounds.
         if ((this_max_x_world < 0) || (this_min_x_world >= view_width) ||
-            (this_max_y_world < 0) || (this_min_y_world >= view_height) ||
+            (this_max_y_world < 0 - this_max_z_world) ||
+            (this_min_y_world >= view_height - this_min_z_world) ||
+            // (this_max_y_world < 0) || (this_min_y_world >= view_height) ||
             (this_max_z_world < 0) || (this_min_z_world >= view_length)) {
-            continue;
+            // continue;
         }
 
         // Get the cells that this `AABB` fits into.
         int min_x_index = std::max(0, this_min_x_world / single_bin_size);
-        int min_y_index = std::max(0, this_min_y_world / single_bin_size);
+        // int min_y_index = std::max(0, this_min_y_world / single_bin_size);
         int min_z_index = std::max(0, this_min_z_world / single_bin_size);
+        int min_y_index =
+            std::max(0, this_min_y_world / single_bin_size) + min_z_index;
 
         int max_x_index =
             std::min(hash_width, this_max_x_world / single_bin_size);
-        int max_y_index =
-            std::min(hash_height, this_max_y_world / single_bin_size);
+        // int max_y_index =
+        //     std::min(hash_height, this_max_y_world / single_bin_size);
         int max_z_index =
             std::min(hash_length, this_max_z_world / single_bin_size);
+        int max_y_index =
+            std::min(hash_height, this_max_y_world / single_bin_size) +
+            max_z_index;
 
         // Place this AABB into every bin that it spans across.
         for (int bin_x = min_x_index; bin_x <= max_x_index; bin_x += 1) {
@@ -177,10 +185,10 @@ void count_entities_in_bins(Entities<entity_count>* p_entities,
 void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                 int* p_aabb_count_in_bin, int* p_aabb_index_to_entity_index_map,
                 Pixel* p_texture) {
-    // `i` is a ray's world-position lateral to the ground, iterating
+    // `i` is a ray's `x` world-position ground, iterating
     // rightwards.
     for (short i = 0; i < view_width; i++) {
-        // `j` is a ray's world-position skywards, iterating downwards.
+        // `j` is a ray's `y` world-position, iterating upwards.
         for (short j = view_height - 1; j >= 0; j--) {
             Ray this_ray = {
                 .origin =
@@ -207,7 +215,7 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
 
             // `bin_z` is a ray's hash-space position casting forwards.
             for (short bin_z = 0; bin_z < hash_length; bin_z++) {
-                for (short bin_y_offset = 0; bin_y_offset < 2;
+                for (short bin_y_offset = 0; bin_y_offset < 1;
                      bin_y_offset += 1) {
                     // `bin_y` represents either bin that a given ray will
                     // intersect along the `y` axis. The ray intersects the
@@ -215,7 +223,7 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                     short bin_y = static_cast<short>((j / single_bin_size) -
                                                      bin_y_offset);
                     if (bin_y < 0) {
-                        break;
+                        // break;
                     }
 
                     // short closest_entity_depth =
@@ -227,7 +235,7 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
 
                     for (int this_bin_entity_index = 0;
                          this_bin_entity_index < entities_in_this_bin;
-                         this_bin_entity_index++) {
+                         this_bin_entity_index += 1) {
                         AABB& this_aabb = p_aabb_bins[index_into_view_hash(
                                                           bin_x, bin_y, bin_z) +
                                                       this_bin_entity_index];
@@ -293,8 +301,6 @@ auto main() -> int {
     int* p_aabb_count_in_bin = new (std::nothrow) int[hash_volume];
 
     AABB* p_aabb_bins = new (std::nothrow) AABB[hash_volume];
-    // int* entity_count_currently_in_bin[hash_volume] = new (std::nothrow)
-    // int[hash_volume];
 
     Pixel* p_texture = new (std::nothrow) Pixel[view_height * view_width];
     if (p_texture == nullptr) {
@@ -305,9 +311,9 @@ auto main() -> int {
 
     for (int i = 0; i < entity_count; i++) {
         // Place entities randomly in world-space, localized around <0,0,0>.
-        int x = (rand() % (view_width * 2)) - view_width;
-        int y = (rand() % (view_height * 2)) - view_height;
-        int z = (rand() % (view_length * 2)) - view_length;
+        int x = (rand() % (view_width * 2)) - view_width / 2;
+        int y = (rand() % (view_height * 2)) - view_height / 2;
+        int z = (rand() % (view_length * 2)) - view_length / 2;
 
         Point<short> new_position = {static_cast<short>(x),
                                      static_cast<short>(y),
@@ -414,6 +420,10 @@ auto main() -> int {
         // SDL_RenderClear(p_renderer);
         SDL_RenderCopy(p_renderer, p_sdl_texture, &view_rect, &blit_rect);
         SDL_RenderPresent(p_renderer);
+
+        std::cout << p_entities->aabbs[0].position.x << '\n';
+        std::cout << p_entities->aabbs[0].position.y << '\n';
+        std::cout << p_entities->aabbs[0].position.z << "\n\n";
     }
 
 exit_loop:
