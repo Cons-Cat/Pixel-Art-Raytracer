@@ -220,57 +220,49 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
 
             // `bin_z` is a ray's hash-space position casting forwards.
             for (short bin_z = 0; bin_z < hash_length; bin_z++) {
-                for (short bin_y_offset = 0; bin_y_offset < 1;
-                     bin_y_offset += 1) {
-                    // `bin_y` represents either bin that a given ray will
-                    // intersect along the `y` axis. The ray intersects the
-                    // higher bin first, then the lower one.
-                    short bin_y = static_cast<short>((j / single_bin_size)
-                                                     // - bin_y_offset
-                    );
-                    // if (bin_y < 0) {
-                    //     // break;
+                // `bin_y` represents either bin that a given ray will
+                // intersect along the `y` axis. The ray intersects the
+                // higher bin first, then the lower one.
+                short bin_y = static_cast<short>((j / single_bin_size));
+
+                // short closest_entity_depth =
+                // std::numeric_limits<short>::max();
+
+                int entities_in_this_bin =
+                    p_aabb_count_in_bin[index_into_view_hash(bin_x, bin_y,
+                                                             bin_z)];
+
+                for (int this_bin_entity_index = 0;
+                     this_bin_entity_index < entities_in_this_bin;
+                     this_bin_entity_index += 1) {
+                    AABB& this_aabb =
+                        p_aabb_bins[index_into_view_hash(bin_x, bin_y, bin_z) +
+                                    this_bin_entity_index];
+
+                    // TODO: If this entity has closer depth.
+                    // if (this_aabb.min_point.y + (j -
+                    // this_aabb.min_point.y) > closest_entity_depth) {
                     // }
 
-                    // short closest_entity_depth =
-                    // std::numeric_limits<short>::max();
-
-                    int entities_in_this_bin =
-                        p_aabb_count_in_bin[index_into_view_hash(bin_x, bin_y,
-                                                                 bin_z)];
-
-                    for (int this_bin_entity_index = 0;
-                         this_bin_entity_index < entities_in_this_bin;
-                         this_bin_entity_index += 1) {
-                        AABB& this_aabb = p_aabb_bins[index_into_view_hash(
-                                                          bin_x, bin_y, bin_z) +
-                                                      this_bin_entity_index];
-
-                        // TODO: If this entity has closer depth.
-                        // if (this_aabb.min_point.y + (j -
-                        // this_aabb.min_point.y) > closest_entity_depth) {
-                        // }
-
-                        // Intersect ray with this aabb.
-                        if (i >= this_aabb.position.x &&
-                            i < this_aabb.position.x + this_aabb.extent.x) {
-                            if (this_aabb.intersect(this_ray)) {
-                                this_color =
-                                    p_entities->colors
-                                        [p_aabb_index_to_entity_index_map
-                                             [index_into_view_hash(bin_x, bin_y,
-                                                                   bin_z)]];
-                                // TODO: Update `closest_entity_depth`.
-                                has_intersected = true;
-                            }
+                    // Intersect ray with this aabb.
+                    if (i >= this_aabb.position.x &&
+                        i < this_aabb.position.x + this_aabb.extent.x) {
+                        if (this_aabb.intersect(this_ray)) {
+                            this_color =
+                                p_entities
+                                    ->colors[p_aabb_index_to_entity_index_map
+                                                 [index_into_view_hash(
+                                                     bin_x, bin_y, bin_z)]];
+                            // TODO: Update `closest_entity_depth`.
+                            has_intersected = true;
                         }
                     }
+                }
 
-                    // Do not bother tracing this ray further if something
-                    // has already intersected.
-                    if (has_intersected) {
-                        goto escape_ray;
-                    }
+                // Do not bother tracing this ray further if something
+                // has already intersected.
+                if (has_intersected) {
+                    goto escape_ray;
                 }
 escape_ray:
                 break;
