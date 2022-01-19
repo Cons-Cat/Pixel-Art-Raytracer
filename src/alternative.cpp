@@ -115,7 +115,7 @@ constexpr int hash_height = view_height / single_bin_size;
 constexpr int hash_length = view_length / single_bin_size;
 constexpr int hash_volume = hash_width * hash_height * hash_length;
 
-constexpr int entity_count = 20;
+constexpr int entity_count = 200;
 
 // The spatial hash is organized near-to-far, by bottom-to-top, by
 // left-to-right.
@@ -135,6 +135,7 @@ void count_entities_in_bins(Entities<entity_count>* p_entities,
         int this_min_y_world = this_aabb.position.y;
         // int this_min_y_world = this_aabb.position.y + this_aabb.position.z;
         int this_min_z_world = this_aabb.position.z;
+
         int this_max_x_world = this_min_x_world + this_aabb.extent.x;
         int this_max_y_world = this_min_y_world + this_aabb.extent.y;
         int this_max_z_world = this_min_z_world + this_aabb.extent.z;
@@ -145,25 +146,29 @@ void count_entities_in_bins(Entities<entity_count>* p_entities,
             (this_min_y_world >= view_height - this_min_z_world) ||
             // (this_max_y_world < 0) || (this_min_y_world >= view_height) ||
             (this_max_z_world < 0) || (this_min_z_world >= view_length)) {
-            // continue;
+            continue;
         }
 
         // Get the cells that this `AABB` fits into.
         int min_x_index = std::max(0, this_min_x_world / single_bin_size);
         // int min_y_index = std::max(0, this_min_y_world / single_bin_size);
         int min_z_index = std::max(0, this_min_z_world / single_bin_size);
-        int min_y_index =
-            std::max(0, this_min_y_world / single_bin_size) + min_z_index;
+        int min_y_index = std::max(
+            0, (this_min_y_world + this_min_z_world) / single_bin_size);
 
         int max_x_index =
             std::min(hash_width, this_max_x_world / single_bin_size);
         // int max_y_index =
         //     std::min(hash_height, this_max_y_world / single_bin_size);
         int max_z_index =
-            std::min(hash_length, this_max_z_world / single_bin_size);
+            std::min(hash_length, (this_max_z_world) / single_bin_size);
         int max_y_index =
-            std::min(hash_height, this_max_y_world / single_bin_size) +
-            max_z_index;
+            std::min(hash_height,
+                     (this_max_y_world + this_max_z_world) / single_bin_size);
+
+        // TODO: Fix this by printing out a 2D y/z slice of the bin counts.
+        min_z_index = 0;
+        max_z_index = hash_length;
 
         // Place this AABB into every bin that it spans across.
         for (int bin_x = min_x_index; bin_x <= max_x_index; bin_x += 1) {
@@ -220,11 +225,12 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                     // `bin_y` represents either bin that a given ray will
                     // intersect along the `y` axis. The ray intersects the
                     // higher bin first, then the lower one.
-                    short bin_y = static_cast<short>((j / single_bin_size) -
-                                                     bin_y_offset);
-                    if (bin_y < 0) {
-                        // break;
-                    }
+                    short bin_y = static_cast<short>((j / single_bin_size)
+                                                     // - bin_y_offset
+                    );
+                    // if (bin_y < 0) {
+                    //     // break;
+                    // }
 
                     // short closest_entity_depth =
                     // std::numeric_limits<short>::max();
@@ -344,8 +350,7 @@ auto main() -> int {
     }
 
     // Place player character near the center.
-    p_entities->aabbs[0].position = {view_width / 2, view_height / 2,
-                                     view_length / 2};
+    p_entities->aabbs[0].position = {view_width / 2, 0, view_length / 2};
 
     // TODO: Make a trivial pass-through graphics shader pipeline in Vulkan
     // to render texture.
