@@ -418,30 +418,6 @@ auto main() -> int {
         // SDL_RenderClear(p_renderer);
         SDL_RenderCopy(p_renderer, p_sdl_texture, &view_rect, &blit_rect);
         SDL_RenderPresent(p_renderer);
-
-        std::cout << "<" << p_entities->aabbs[0].position.x << ", "
-                  << p_entities->aabbs[0].position.y << ", "
-                  << p_entities->aabbs[0].position.z << ">\n";
-        std::cout
-            << "<"
-            << p_entities->aabbs[0].position.x + p_entities->aabbs[0].extent.x
-            << ", "
-            << p_entities->aabbs[0].position.y + p_entities->aabbs[0].extent.y
-            << ", "
-            << p_entities->aabbs[0].position.z + p_entities->aabbs[0].extent.z
-            << ">\n";
-
-        for (int j = 0; j < hash_height; j++) {
-            for (int k = 0; k < hash_length; k++) {
-                std::cout
-                    << p_aabb_count_in_bin[index_into_view_hash(
-                           p_entities->aabbs[0].position.x / single_bin_size, j,
-                           k)]
-                    << " ";
-            }
-            std::cout << "\n";
-        }
-        std::cout << "\n";
     }
 
 exit_loop:
