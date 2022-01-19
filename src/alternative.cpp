@@ -38,10 +38,11 @@ struct alignas(16) AABB {
 
         // X plane comparisons.
         if (ray.direction_inverse.x != 0) {
-            short intersect_x_1 =
-                static_cast<short>((position.x - ray.origin.x));
+            short intersect_x_1 = static_cast<short>(
+                (position.x - ray.origin.x) * ray.direction_inverse.x);
             short intersect_x_2 =
-                static_cast<short>((position.x + extent.x - ray.origin.x));
+                static_cast<short>((position.x + extent.x - ray.origin.x) *
+                                   ray.direction_inverse.x);
             min_distance = std::min(intersect_x_1, intersect_x_2);
             max_distance = std::max(intersect_x_1, intersect_x_2);
         }
@@ -110,9 +111,9 @@ constexpr short single_bin_size = 20;
 constexpr int view_width = 480;
 constexpr int view_height = 320;
 constexpr int view_length = 320;
-constexpr int hash_width = view_width / single_bin_size;
-constexpr int hash_height = view_height / single_bin_size;
-constexpr int hash_length = view_length / single_bin_size;
+constexpr int hash_width = (view_width) / single_bin_size;
+constexpr int hash_height = (view_height) / single_bin_size;
+constexpr int hash_length = (view_length) / single_bin_size;
 constexpr int hash_volume = hash_width * hash_height * hash_length;
 
 constexpr int entity_count = 200;
@@ -133,48 +134,42 @@ void count_entities_in_bins(Entities<entity_count>* p_entities,
         // The `y` coordinate shifts upwards as `z` increases.
         int this_min_x_world = this_aabb.position.x;
         int this_min_y_world = this_aabb.position.y;
-        // int this_min_y_world = this_aabb.position.y + this_aabb.position.z;
         int this_min_z_world = this_aabb.position.z;
 
         int this_max_x_world = this_min_x_world + this_aabb.extent.x;
         int this_max_y_world = this_min_y_world + this_aabb.extent.y;
         int this_max_z_world = this_min_z_world + this_aabb.extent.z;
 
+        // TODO: Fix hard-coded numbers.
         // Skip this entity if it fits entirely outside of the view bounds.
         if ((this_max_x_world < 0) || (this_min_x_world >= view_width) ||
             (this_max_y_world < 0 - this_max_z_world) ||
-            (this_min_y_world >= view_height - this_min_z_world) ||
-            // (this_max_y_world < 0) || (this_min_y_world >= view_height) ||
-            (this_max_z_world < 0) || (this_min_z_world >= view_length)) {
+            (this_min_y_world >= view_height - this_min_z_world + 20) ||
+            (this_max_z_world < -this_aabb.extent.z - 20) ||
+            (this_min_z_world >= view_length)) {
             continue;
         }
 
         // Get the cells that this `AABB` fits into.
         int min_x_index = std::max(0, this_min_x_world / single_bin_size);
-        // int min_y_index = std::max(0, this_min_y_world / single_bin_size);
+        int min_y_index =
+            std::max(0, (view_height - this_max_y_world) / single_bin_size  //
+                            - (this_max_z_world) / single_bin_size - 1);
         int min_z_index = std::max(0, this_min_z_world / single_bin_size);
-        int min_y_index = std::max(
-            0, (this_min_y_world + this_min_z_world) / single_bin_size);
 
         int max_x_index =
-            std::min(hash_width, this_max_x_world / single_bin_size);
-        // int max_y_index =
-        //     std::min(hash_height, this_max_y_world / single_bin_size);
-        int max_z_index =
-            std::min(hash_length, (this_max_z_world) / single_bin_size);
+            std::min(hash_width - 1, this_max_x_world / single_bin_size);
         int max_y_index =
-            std::min(hash_height,
-                     (this_max_y_world + this_max_z_world) / single_bin_size);
-
-        // TODO: Fix this by printing out a 2D y/z slice of the bin counts.
-        min_z_index = 0;
-        max_z_index = hash_length;
+            std::min(hash_height - 1,
+                     (view_height - this_min_y_world) / single_bin_size  //
+                         - (this_min_z_world) / single_bin_size + 1);
+        int max_z_index =
+            std::min(hash_length - 1, this_max_z_world / single_bin_size);
 
         // Place this AABB into every bin that it spans across.
         for (int bin_x = min_x_index; bin_x <= max_x_index; bin_x += 1) {
-            for (int bin_y = min_y_index; bin_y <= max_y_index; bin_y += 1) {
-                for (int bin_z = min_z_index; bin_z <= max_z_index;
-                     bin_z += 1) {
+            for (int bin_y = min_y_index; bin_y < max_y_index; bin_y += 1) {
+                for (int bin_z = min_z_index; bin_z < max_z_index; bin_z += 1) {
                     p_aabb_bins[index_into_view_hash(bin_x, bin_y, bin_z)] =
                         this_aabb;
                     p_aabb_count_in_bin[index_into_view_hash(bin_x, bin_y,
@@ -194,12 +189,13 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
     // rightwards.
     for (short i = 0; i < view_width; i++) {
         // `j` is a ray's `y` world-position, iterating upwards.
-        for (short j = view_height - 1; j >= 0; j--) {
+        // for (short j = view_height - 1; j >= 0; j--) {
+        for (short j = 0; j < view_height; j++) {
             Ray this_ray = {
                 .origin =
                     {
                         .x = i,
-                        .y = j,
+                        .y = static_cast<short>(view_height - j),
                         .z = 0,
                     },
                 .direction_inverse =
@@ -223,7 +219,7 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                 // `bin_y` represents either bin that a given ray will
                 // intersect along the `y` axis. The ray intersects the
                 // higher bin first, then the lower one.
-                short bin_y = static_cast<short>((j / single_bin_size));
+                short bin_y = static_cast<short>(j / single_bin_size);
 
                 // short closest_entity_depth =
                 // std::numeric_limits<short>::max();
@@ -247,6 +243,7 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                     // Intersect ray with this aabb.
                     if (i >= this_aabb.position.x &&
                         i < this_aabb.position.x + this_aabb.extent.x) {
+                        // if (true) {
                         if (this_aabb.intersect(this_ray)) {
                             this_color =
                                 p_entities
@@ -265,12 +262,12 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                     goto escape_ray;
                 }
 escape_ray:
-                break;
+                continue;
             }
 
             // `j` decreases as the cursor moves downwards.
             // `i` increases as the cursor moves rightwards.
-            p_texture[(view_height - j) * view_width + i] = this_color;
+            p_texture[j * view_width + i] = this_color;
         }
     }
 
@@ -342,7 +339,8 @@ auto main() -> int {
     }
 
     // Place player character near the center.
-    p_entities->aabbs[0].position = {view_width / 2, 0, view_length / 2};
+    p_entities->aabbs[0].position = {view_width / 2, view_height / 2,
+                                     view_length / 4};
 
     // TODO: Make a trivial pass-through graphics shader pipeline in Vulkan
     // to render texture.
@@ -394,7 +392,9 @@ auto main() -> int {
             }
         }
 
-        memset(p_aabb_count_in_bin, 0, hash_volume * sizeof(int));
+        // Reset bin counts to `0`.
+        memset(p_aabb_count_in_bin, 0,
+               hash_volume * sizeof(decltype(*p_aabb_count_in_bin)));
         count_entities_in_bins(p_entities, p_aabb_bins, p_aabb_count_in_bin,
                                p_aabb_index_to_entity_index_map);
         trace_hash(p_entities, p_aabb_bins, p_aabb_count_in_bin,
@@ -403,6 +403,7 @@ auto main() -> int {
         int texture_pitch;
         SDL_LockTexture(p_sdl_texture, nullptr, p_blit_address, &texture_pitch);
         for (int row = 0; row < view_height; row++) {
+            // Reset texture to gray.
             memset(static_cast<char*>((void*)p_blit) + row * texture_pitch,
                    256 / 2, 1920);
             memcpy(static_cast<char*>((void*)p_blit) + row * texture_pitch,
@@ -418,9 +419,29 @@ auto main() -> int {
         SDL_RenderCopy(p_renderer, p_sdl_texture, &view_rect, &blit_rect);
         SDL_RenderPresent(p_renderer);
 
-        std::cout << p_entities->aabbs[0].position.x << '\n';
-        std::cout << p_entities->aabbs[0].position.y << '\n';
-        std::cout << p_entities->aabbs[0].position.z << "\n\n";
+        std::cout << "<" << p_entities->aabbs[0].position.x << ", "
+                  << p_entities->aabbs[0].position.y << ", "
+                  << p_entities->aabbs[0].position.z << ">\n";
+        std::cout
+            << "<"
+            << p_entities->aabbs[0].position.x + p_entities->aabbs[0].extent.x
+            << ", "
+            << p_entities->aabbs[0].position.y + p_entities->aabbs[0].extent.y
+            << ", "
+            << p_entities->aabbs[0].position.z + p_entities->aabbs[0].extent.z
+            << ">\n";
+
+        for (int j = 0; j < hash_height; j++) {
+            for (int k = 0; k < hash_length; k++) {
+                std::cout
+                    << p_aabb_count_in_bin[index_into_view_hash(
+                           p_entities->aabbs[0].position.x / single_bin_size, j,
+                           k)]
+                    << " ";
+            }
+            std::cout << "\n";
+        }
+        std::cout << "\n";
     }
 
 exit_loop:
