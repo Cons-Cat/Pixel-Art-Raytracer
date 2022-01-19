@@ -217,12 +217,13 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                     if (bin_y < 0) {
                         break;
                     }
-                    int entities_in_this_bin =
-                        p_aabb_count_in_bin[index_into_view_hash(bin_x, bin_y,
-                                                                 bin_z)];
 
                     // short closest_entity_depth =
                     // std::numeric_limits<short>::max();
+
+                    int entities_in_this_bin =
+                        p_aabb_count_in_bin[index_into_view_hash(bin_x, bin_y,
+                                                                 bin_z)];
 
                     for (int this_bin_entity_index = 0;
                          this_bin_entity_index <
@@ -304,9 +305,7 @@ auto main() -> int {
     srand(time(0));
 
     for (int i = 0; i < p_entities->size(); i++) {
-        // Place entities, in world-space, randomly throughout a cube which
-        // bounds the orthographic view frustrum, assuming the camera is at
-        // <0,0,0>.
+        // Place entities randomly in world-space, localized around <0,0,0>.
         int x = (rand() % (view_width * 2)) - view_width;
         int y = (rand() % (view_height * 2)) - view_height;
         int z = (rand() % (view_length * 2)) - view_length;
@@ -315,7 +314,7 @@ auto main() -> int {
                                      static_cast<short>(y),
                                      static_cast<short>(z)};
 
-        // An AABB's volume is currently hard-coded to 10^3.
+        // An AABB's volume is currently hard-coded to 20^3.
         p_entities->insert({
             .aabb = {.position = {new_position.x, new_position.y,
                                   new_position.z},
