@@ -84,21 +84,66 @@ struct Pixel {
     unsigned char red, green, blue, alpha;
 };
 
+Pixel palette[] = {
+    {60, 60, 60},     // Dark
+    {120, 120, 120},  // Dark gray
+    {200, 200, 200},  // Bright gray
+    {240, 240, 240},  // Bright
+};
+
+struct Sprite {
+    int data[20 * 20];
+};
+
+constexpr auto make_tile_floor = []() -> Sprite {
+    constexpr Sprite data{
+        3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,  //
+        3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,  //
+        3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,  //
+        3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,  //
+        3, 3, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3,  //
+        3, 3, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3,  //
+        3, 3, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3,  //
+        3, 3, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3,  //
+        3, 3, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3,  //
+        3, 3, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3,  //
+        3, 3, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3,  //
+        3, 3, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3,  //
+        3, 3, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3,  //
+        3, 3, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3,  //
+        3, 3, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3,  //
+        3, 3, 3, 3, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 3, 3, 3, 3,  //
+        3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,  //
+        3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,  //
+        3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,  //
+        3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,  //
+    };
+    return data;
+};
+constexpr Sprite tile_floor = make_tile_floor();
+
+// constexpr auto make_tile_front = []() -> Sprite {
+//     return {};
+// };
+// constexpr Sprite tile_front = make_tile_floor();
+
 template <int entity_count>
 struct Entities {
     AABB aabbs[entity_count];
-    Pixel colors[entity_count];  // TODO: Make sprite.
+    Sprite sprites[entity_count];
+
     int last_entity_index = 0;
 
     using Entity = struct {
         AABB aabb;
-        Pixel color;
+        Sprite sprite;
     };
 
     // TODO: Consider perfect forwarding or move:
     void insert(Entity const entity) {
         aabbs[last_entity_index] = entity.aabb;
-        colors[last_entity_index] = entity.color;
+        // sprites[last_entity_index] = entity.sprite;
+        sprites[last_entity_index] = tile_floor;
         last_entity_index += 1;
     }
 
@@ -245,11 +290,12 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                         i < this_aabb.position.x + this_aabb.extent.x) {
                         // if (true) {
                         if (this_aabb.intersect(this_ray)) {
-                            this_color =
-                                p_entities
-                                    ->colors[p_aabb_index_to_entity_index_map
-                                                 [index_into_view_hash(
-                                                     bin_x, bin_y, bin_z)]];
+                            this_color = palette
+                                [p_entities
+                                     ->sprites[p_aabb_index_to_entity_index_map
+                                                   [index_into_view_hash(
+                                                       bin_x, bin_y, bin_z)]]
+                                     .data[0]];
                             // TODO: Update `closest_entity_depth`.
                             has_intersected = true;
                         }
@@ -321,9 +367,9 @@ auto main() -> int {
                      .extent = {20, 20, 20}},
 
             // Randomize colors:
-            .color = {static_cast<unsigned char>(rand()),
-                      static_cast<unsigned char>(rand()),
-                      static_cast<unsigned char>(255u)},
+            // .color = {static_cast<unsigned char>(rand()),
+            //           static_cast<unsigned char>(rand()),
+            //           static_cast<unsigned char>(255u)},
 
             //     // Visualize Y coordinates:
             //     .color = {static_cast<unsigned char>((y + view_height) /
@@ -339,8 +385,7 @@ auto main() -> int {
     }
 
     // Place player character near the center.
-    p_entities->aabbs[0].position = {view_width / 2, view_height / 2,
-                                     view_length / 4};
+    p_entities->aabbs[0].position = {view_width / 2, 0, view_length / 4};
 
     // TODO: Make a trivial pass-through graphics shader pipeline in Vulkan
     // to render texture.
@@ -384,6 +429,12 @@ auto main() -> int {
                             break;
                         case SDLK_DOWN:
                             p_entities->aabbs[0].position.z -= 5;
+                            break;
+                        case SDLK_PAGEDOWN:
+                            p_entities->aabbs[0].position.y -= 5;
+                            break;
+                        case SDLK_PAGEUP:
+                            p_entities->aabbs[0].position.y += 5;
                             break;
                         default:
                             break;
