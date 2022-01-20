@@ -166,12 +166,21 @@ constexpr int hash_volume = hash_width * hash_height * hash_length;
 
 constexpr int entity_count = 200;
 
+// The number of AABBs that can fit inside of a single bin. This is an
+// exponentiation of `2` for pushing into a bin with efficient wrapping
+// semantics with bitwise `&`.
+constexpr int sparse_bin_size = 8;
+
 // The spatial hash is organized near-to-far, by bottom-to-top, by
 // left-to-right.
 // That is generally a cache-friendly layout for this data.
 auto index_into_view_hash(int x, int y, int z) -> int {
     return (x * hash_height * hash_length) + (y * hash_length) + z;
 }
+
+// TODO total aabb count.
+AABB* p_aabb_flatbins = new (std::nothrow) AABB[hash_volume];
+int total_entities_in_bins = 0;
 
 void count_entities_in_bins(Entities<entity_count>* p_entities,
                             AABB* p_aabb_bins, int* p_aabb_count_in_bin,
@@ -218,12 +227,22 @@ void count_entities_in_bins(Entities<entity_count>* p_entities,
         for (int bin_x = min_x_index; bin_x <= max_x_index; bin_x += 1) {
             for (int bin_y = min_y_index; bin_y < max_y_index; bin_y += 1) {
                 for (int bin_z = min_z_index; bin_z < max_z_index; bin_z += 1) {
-                    p_aabb_bins[index_into_view_hash(bin_x, bin_y, bin_z)] =
-                        this_aabb;
-                    p_aabb_count_in_bin[index_into_view_hash(bin_x, bin_y,
-                                                             bin_z)] += 1;
+                    int this_bin_count =
+                        p_aabb_count_in_bin[index_into_view_hash(bin_x, bin_y,
+                                                                 bin_z)];
+
                     p_aabb_index_to_entity_index_map[index_into_view_hash(
-                        bin_x, bin_y, bin_z)] = i;
+                                                         bin_x, bin_y, bin_z) *
+                                                         sparse_bin_size +
+                                                     this_bin_count] = i;
+
+                    // Increment the count of `AABB`s in this bin, wrapping
+                    // around `sparse_bin_size`. That value is currently `8`.
+                    p_aabb_count_in_bin[index_into_view_hash(bin_x, bin_y,
+                                                             bin_z) *
+                                            sparse_bin_size +
+                                        this_bin_count] =
+                        (this_bin_count + 1) & sparse_bin_size;
                 }
             }
         }
@@ -293,7 +312,8 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                         if (this_aabb.intersect(this_ray)) {
                             int this_entity_index =
                                 p_aabb_index_to_entity_index_map
-                                    [index_into_view_hash(bin_x, bin_y, bin_z)];
+                                    [index_into_view_hash(bin_x, bin_y, bin_z) +
+                                     this_bin_entity_index];
 
                             int this_sprite_index =
                                 // Sprite's row:
@@ -311,10 +331,12 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                                 (i - p_entities->aabbs[this_entity_index]
                                          .position.x);
 
-                            this_color =
-                                pixel_palette[p_entities
-                                                  ->sprites[this_entity_index]
-                                                  .data[this_sprite_index]];
+                            // this_color =
+                            //     pixel_palette[p_entities
+                            //                       ->sprites[this_entity_index]
+                            //                       .data[this_sprite_index]];
+
+                            this_color = {255, 255, 255};
                             // TODO: Update `closest_entity_depth`.
                             has_intersected = true;
                         }
@@ -355,12 +377,13 @@ auto main() -> int {
     // p_entities is random-access, but the bins they're stored into are
     // not, so we must store a random-access map to the entities'
     // attributes.
-    int* p_aabb_index_to_entity_index_map = new (std::nothrow) int[hash_volume];
+    int* p_aabb_index_to_entity_index_map =
+        new (std::nothrow) int[hash_volume * sparse_bin_size];
 
     // Track how many entities fit into each bin.
     int* p_aabb_count_in_bin = new (std::nothrow) int[hash_volume];
 
-    AABB* p_aabb_bins = new (std::nothrow) AABB[hash_volume];
+    AABB* p_aabb_bins = new (std::nothrow) AABB[hash_volume * sparse_bin_size];
 
     Pixel* p_texture = new (std::nothrow) Pixel[view_height * view_width];
     if (p_texture == nullptr) {
