@@ -262,9 +262,6 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
 
             // `bin_z` is a ray's hash-space position casting forwards.
             for (short bin_z = 0; bin_z < hash_length; bin_z++) {
-                // `bin_y` represents either bin that a given ray will
-                // intersect along the `y` axis. The ray intersects the
-                // higher bin first, then the lower one.
                 short bin_y = static_cast<short>(j / single_bin_size);
 
                 // short closest_entity_depth =
@@ -373,7 +370,8 @@ auto main() -> int {
         // Place entities randomly in world-space, localized around <0,0,0>.
         int x = (rand() % (view_width * 2)) - view_width / 2;
         int y = (rand() % (view_height * 2)) - view_height / 2;
-        int z = (rand() % (view_length * 2)) - view_length / 2;
+        // int z = (rand() % (view_length * 2)) - view_length / 2;
+        int z = view_length / 2;
 
         Point<short> new_position = {static_cast<short>(x),
                                      static_cast<short>(y),
@@ -384,22 +382,6 @@ auto main() -> int {
             .aabb = {.position = {new_position.x, new_position.y,
                                   new_position.z},
                      .extent = {20, 20, 20}},
-
-            // Randomize colors:
-            // .color = {static_cast<unsigned char>(rand()),
-            //           static_cast<unsigned char>(rand()),
-            //           static_cast<unsigned char>(255u)},
-
-            //     // Visualize Y coordinates:
-            //     .color = {static_cast<unsigned char>((y + view_height) /
-            //                                          (view_height * 2.f)
-            //                                          * 255.f),
-            //               static_cast<unsigned char>((y + view_height) /
-            //                                          (view_height * 2.f)
-            //                                          * 255.f),
-            //               static_cast<unsigned char>((y + view_height) /
-            //                                          (view_height * 2.f)
-            //                                          * 255.f)},
         });
     }
 
