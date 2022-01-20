@@ -223,25 +223,26 @@ void count_entities_in_bins(Entities<entity_count>* p_entities,
             (this_max_y_world < 0 - this_max_z_world) ||
             (this_min_y_world >= view_height - this_min_z_world + 20) ||
             (this_max_z_world < -this_aabb.extent.z - 20) ||
-            (this_min_z_world >= view_length)) {
+            (this_min_z_world > view_length + 20)) {
             continue;
         }
 
         // Get the cells that this `AABB` fits into.
         int min_x_index = std::max(0, this_min_x_world / single_bin_area);
-        int min_y_index =
-            std::max(0, (view_height - this_max_y_world) / single_bin_area -
-                            (this_max_z_world) / single_bin_area);
-        int min_z_index = std::max(0, this_min_z_world / single_bin_area) - 1;
+        int min_y_index = std::max<int>(
+            0, (view_height - this_max_y_world - this_max_z_world) /
+                   single_bin_area);
+        int min_z_index = std::max(0, this_min_z_world / single_bin_area);
 
         int max_x_index =
             std::min(hash_width - 1, this_max_x_world / single_bin_area);
+        // `max_y_index` is rounded up to the nearest multiple of `20`.
         int max_y_index =
-            std::min(hash_height - 1,
-                     (view_height - this_min_y_world) / single_bin_area -
-                         (this_min_z_world) / single_bin_area);
+            std::min(hash_height,
+                     (view_height - this_min_y_world - this_min_z_world + 19) /
+                         single_bin_area);
         int max_z_index =
-            std::min(hash_length - 1, this_max_z_world / single_bin_area);
+            std::min(hash_length, this_max_z_world / single_bin_area);
 
         // Place this AABB into every bin that it spans across.
         for (int bin_x = min_x_index; bin_x <= max_x_index; bin_x += 1) {
@@ -515,6 +516,30 @@ auto main() -> int {
         // SDL_RenderClear(p_renderer);
         SDL_RenderCopy(p_renderer, p_sdl_texture, &view_rect, &blit_rect);
         SDL_RenderPresent(p_renderer);
+
+        std::cout << "<" << p_entities->aabbs[0].position.x << ", "
+                  << p_entities->aabbs[0].position.y << ", "
+                  << p_entities->aabbs[0].position.z << ">\n";
+        std::cout
+            << "<"
+            << p_entities->aabbs[0].position.x + p_entities->aabbs[0].extent.x
+            << ", "
+            << p_entities->aabbs[0].position.y + p_entities->aabbs[0].extent.y
+            << ", "
+            << p_entities->aabbs[0].position.z + p_entities->aabbs[0].extent.z
+            << ">\n";
+
+        for (int j = 0; j < hash_height; j++) {
+            for (int k = 0; k < hash_length; k++) {
+                std::cout
+                    << p_aabb_count_in_bin[index_into_view_hash(
+                           p_entities->aabbs[0].position.x / single_bin_area, j,
+                           k)]
+                    << " ";
+            }
+            std::cout << "\n";
+        }
+        std::cout << "\n";
     }
 
 exit_loop:
