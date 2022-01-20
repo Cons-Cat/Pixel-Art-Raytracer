@@ -502,9 +502,11 @@ auto main() -> int {
         SDL_LockTexture(p_sdl_texture, nullptr, p_blit_address, &texture_pitch);
         for (int row = 0; row < view_height; row++) {
             // Reset texture to gray.
-            memset(static_cast<char*>((void*)p_blit) + row * texture_pitch,
+            memset(static_cast<char*>(static_cast<void*>(p_blit)) +
+                       row * texture_pitch,
                    256 / 2, 1920);
-            memcpy(static_cast<char*>((void*)p_blit) + row * texture_pitch,
+            memcpy(static_cast<char*>(static_cast<void*>(p_blit)) +
+                       row * texture_pitch,
                    p_texture + row * view_width, view_width * sizeof(Pixel));
         }
         SDL_UnlockTexture(p_sdl_texture);
