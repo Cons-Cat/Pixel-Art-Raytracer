@@ -152,13 +152,16 @@ struct Entities {
     }
 };
 
-constexpr short single_bin_size = 20;
+// The area of a bin's face is hard-coded to 20 to perfectly conform to the area
+// of a tile's sprite.
+constexpr short single_bin_area = 20;
+
 constexpr int view_width = 480;
 constexpr int view_height = 320;
 constexpr int view_length = 320;
-constexpr int hash_width = (view_width) / single_bin_size;
-constexpr int hash_height = (view_height) / single_bin_size;
-constexpr int hash_length = (view_length) / single_bin_size;
+constexpr int hash_width = (view_width) / single_bin_area;
+constexpr int hash_height = (view_height) / single_bin_area;
+constexpr int hash_length = (view_length) / single_bin_area;
 constexpr int hash_volume = hash_width * hash_height * hash_length;
 
 constexpr int entity_count = 200;
@@ -196,20 +199,20 @@ void count_entities_in_bins(Entities<entity_count>* p_entities,
         }
 
         // Get the cells that this `AABB` fits into.
-        int min_x_index = std::max(0, this_min_x_world / single_bin_size);
+        int min_x_index = std::max(0, this_min_x_world / single_bin_area);
         int min_y_index =
-            std::max(0, (view_height - this_max_y_world) / single_bin_size  //
-                            - (this_max_z_world) / single_bin_size - 1);
-        int min_z_index = std::max(0, this_min_z_world / single_bin_size);
+            std::max(0, (view_height - this_max_y_world) / single_bin_area  //
+                            - (this_max_z_world) / single_bin_area - 1);
+        int min_z_index = std::max(0, this_min_z_world / single_bin_area);
 
         int max_x_index =
-            std::min(hash_width - 1, this_max_x_world / single_bin_size);
+            std::min(hash_width - 1, this_max_x_world / single_bin_area);
         int max_y_index =
             std::min(hash_height - 1,
-                     (view_height - this_min_y_world) / single_bin_size  //
-                         - (this_min_z_world) / single_bin_size + 1);
+                     (view_height - this_min_y_world) / single_bin_area  //
+                         - (this_min_z_world) / single_bin_area + 1);
         int max_z_index =
-            std::min(hash_length - 1, this_max_z_world / single_bin_size);
+            std::min(hash_length - 1, this_max_z_world / single_bin_area);
 
         // Place this AABB into every bin that it spans across.
         for (int bin_x = min_x_index; bin_x <= max_x_index; bin_x += 1) {
@@ -258,11 +261,11 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
             // The hash frustrum's data is stored such that increasing the `z`
             // index finds AABBs with proportionally lower `y` coordinates, so
             // decrementing `y` by `z` here is unnecessary.
-            int bin_x = i / single_bin_size;
+            int bin_x = i / single_bin_area;
 
             // `bin_z` is a ray's hash-space position casting forwards.
             for (short bin_z = 0; bin_z < hash_length; bin_z++) {
-                short bin_y = static_cast<short>(j / single_bin_size);
+                short bin_y = static_cast<short>(j / single_bin_area);
 
                 // short closest_entity_depth =
                 // std::numeric_limits<short>::max();
@@ -335,11 +338,11 @@ escape_ray:
 
     // Draw hash grid.
     for (int i = 0; i < view_width; i += 1) {
-        for (int j = 0; j < view_height; j += single_bin_size) {
+        for (int j = 0; j < view_height; j += single_bin_area) {
             p_texture[j * view_width + i] = {0, 0, 0};
         }
     }
-    for (int i = 0; i < view_width; i += single_bin_size) {
+    for (int i = 0; i < view_width; i += single_bin_area) {
         for (int j = 0; j < view_height; j += 1) {
             p_texture[j * view_width + i] = {0, 0, 0};
         }
@@ -370,8 +373,7 @@ auto main() -> int {
         // Place entities randomly in world-space, localized around <0,0,0>.
         int x = (rand() % (view_width * 2)) - view_width / 2;
         int y = (rand() % (view_height * 2)) - view_height / 2;
-        // int z = (rand() % (view_length * 2)) - view_length / 2;
-        int z = view_length / 2;
+        int z = (rand() % (view_length * 2)) - view_length / 2;
 
         Point<short> new_position = {static_cast<short>(x),
                                      static_cast<short>(y),
