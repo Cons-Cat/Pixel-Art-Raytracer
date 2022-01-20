@@ -332,37 +332,43 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                     // Intersect ray with this aabb.
                     if (i >= this_aabb.position.x &&
                         i < this_aabb.position.x + this_aabb.extent.x) {
-                        if (this_aabb.intersect(this_ray)) {
-                            int this_entity_index =
-                                p_aabb_index_to_entity_index_map
-                                    [index_into_view_hash(bin_x, bin_y, bin_z) *
-                                         sparse_bin_size +
-                                     this_bin_entity_index];
+                        if (world_j >
+                                this_aabb.position.y + this_aabb.position.z &&
+                            world_j <=
+                                this_aabb.position.y + this_aabb.extent.y +
+                                    this_aabb.position.z + this_aabb.extent.z) {
+                            if (this_aabb.intersect(this_ray)) {
+                                int this_entity_index =
+                                    p_aabb_index_to_entity_index_map
+                                        [index_into_view_hash(bin_x, bin_y,
+                                                              bin_z) *
+                                             sparse_bin_size +
+                                         this_bin_entity_index];
 
-                            int this_sprite_index =
-                                // Sprite's row:
-                                ((p_entities->aabbs[this_entity_index]
-                                      .position.y +
-                                  p_entities->aabbs[this_entity_index]
-                                      .extent.y +
-                                  p_entities->aabbs[this_entity_index]
-                                      .position.z +
-                                  p_entities->aabbs[this_entity_index]
-                                      .extent.z) -
-                                 (world_j)) *
-                                    20 +
-                                // Sprite's column:
-                                (i - p_entities->aabbs[this_entity_index]
-                                         .position.x);
+                                int this_sprite_index =
+                                    // Sprite's row:
+                                    ((p_entities->aabbs[this_entity_index]
+                                          .position.y +
+                                      p_entities->aabbs[this_entity_index]
+                                          .extent.y +
+                                      p_entities->aabbs[this_entity_index]
+                                          .position.z +
+                                      p_entities->aabbs[this_entity_index]
+                                          .extent.z) -
+                                     (world_j)) *
+                                        20 +
+                                    // Sprite's column:
+                                    (i - p_entities->aabbs[this_entity_index]
+                                             .position.x);
 
-                            this_color =
-                                pixel_palette[p_entities
-                                                  ->sprites[this_entity_index]
-                                                  .data[this_sprite_index]];
+                                this_color = pixel_palette
+                                    [p_entities->sprites[this_entity_index]
+                                         .data[this_sprite_index]];
 
-                            // this_color = {255, 255, 255};
-                            // TODO: Update `closest_entity_depth`.
-                            has_intersected = true;
+                                // this_color = {255, 255, 255};
+                                // TODO: Update `closest_entity_depth`.
+                                has_intersected = true;
+                            }
                         }
                     }
                 }
