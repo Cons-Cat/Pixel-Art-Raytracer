@@ -378,10 +378,9 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                 if (has_intersected) {
                     goto escape_ray;
                 }
-escape_ray:
-                continue;
             }
 
+escape_ray:
             // `j` decreases as the cursor moves downwards.
             // `i` increases as the cursor moves rightwards.
             p_texture[j * view_width + i] = this_color;
