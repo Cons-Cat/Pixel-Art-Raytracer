@@ -84,7 +84,7 @@ struct Pixel {
     unsigned char red, green, blue, alpha;
 };
 
-Pixel palette[] = {
+Pixel pixel_palette[] = {
     {60, 60, 60},     // Dark
     {120, 120, 120},  // Dark gray
     {200, 200, 200},  // Bright gray
@@ -236,11 +236,12 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
         // `j` is a ray's `y` world-position, iterating upwards.
         // for (short j = view_height - 1; j >= 0; j--) {
         for (short j = 0; j < view_height; j++) {
+            short world_j = static_cast<short>(view_height - j);
             Ray this_ray = {
                 .origin =
                     {
                         .x = i,
-                        .y = static_cast<short>(view_height - j),
+                        .y = world_j,
                         .z = 0,
                     },
                 .direction_inverse =
@@ -290,12 +291,30 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                         i < this_aabb.position.x + this_aabb.extent.x) {
                         // if (true) {
                         if (this_aabb.intersect(this_ray)) {
-                            this_color = palette
-                                [p_entities
-                                     ->sprites[p_aabb_index_to_entity_index_map
-                                                   [index_into_view_hash(
-                                                       bin_x, bin_y, bin_z)]]
-                                     .data[0]];
+                            int this_entity_index =
+                                p_aabb_index_to_entity_index_map
+                                    [index_into_view_hash(bin_x, bin_y, bin_z)];
+
+                            int this_sprite_index =
+                                // Sprite's row:
+                                ((p_entities->aabbs[this_entity_index]
+                                      .position.y +
+                                  p_entities->aabbs[this_entity_index]
+                                      .extent.y +
+                                  p_entities->aabbs[this_entity_index]
+                                      .position.z +
+                                  p_entities->aabbs[this_entity_index]
+                                      .extent.z) -
+                                 world_j) *
+                                    20 +
+                                // Sprite's column:
+                                (i - p_entities->aabbs[this_entity_index]
+                                         .position.x);
+
+                            this_color =
+                                pixel_palette[p_entities
+                                                  ->sprites[this_entity_index]
+                                                  .data[this_sprite_index]];
                             // TODO: Update `closest_entity_depth`.
                             has_intersected = true;
                         }
