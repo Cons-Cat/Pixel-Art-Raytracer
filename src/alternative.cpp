@@ -92,7 +92,7 @@ Pixel pixel_palette[] = {
 };
 
 struct Sprite {
-    int data[20 * 20];
+    int data[20 * 40];
 };
 
 constexpr auto make_tile_floor = []() -> Sprite {
@@ -117,6 +117,26 @@ constexpr auto make_tile_floor = []() -> Sprite {
         3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,  //
         3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,  //
         3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3,  //
+        2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2,  //
+        2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2,  //
+        2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2,  //
+        2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2,  //
+        2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2,  //
+        2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2,  //
+        2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2,  //
+        2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2,  //
+        2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2,  //
+        2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2,  //
+        2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2,  //
+        2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2,  //
+        2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2,  //
+        2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2,  //
+        2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2,  //
+        2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2,  //
+        2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2,  //
+        2, 2, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 2, 2,  //
+        2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,  //
+        2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2, 2,  //
     };
     return data;
 };
@@ -210,24 +230,23 @@ void count_entities_in_bins(Entities<entity_count>* p_entities,
         // Get the cells that this `AABB` fits into.
         int min_x_index = std::max(0, this_min_x_world / single_bin_area);
         int min_y_index =
-            std::max(0, (view_height - this_max_y_world) / single_bin_area  //
-                            - (this_max_z_world) / single_bin_area - 1);
-        int min_z_index = std::max(0, this_min_z_world / single_bin_area);
+            std::max(0, (view_height - this_max_y_world) / single_bin_area -
+                            (this_max_z_world) / single_bin_area);
+        int min_z_index = std::max(0, this_min_z_world / single_bin_area) - 1;
 
         int max_x_index =
             std::min(hash_width - 1, this_max_x_world / single_bin_area);
         int max_y_index =
             std::min(hash_height - 1,
-                     (view_height - this_min_y_world) / single_bin_area  //
-                         - (this_min_z_world) / single_bin_area + 1);
+                     (view_height - this_min_y_world) / single_bin_area -
+                         (this_min_z_world) / single_bin_area);
         int max_z_index =
             std::min(hash_length - 1, this_max_z_world / single_bin_area);
 
         // Place this AABB into every bin that it spans across.
         for (int bin_x = min_x_index; bin_x <= max_x_index; bin_x += 1) {
             for (int bin_y = min_y_index; bin_y < max_y_index; bin_y += 1) {
-                for (int bin_z = min_z_index; bin_z <= max_z_index;
-                     bin_z += 1) {
+                for (int bin_z = min_z_index; bin_z < max_z_index; bin_z += 1) {
                     int this_bin_count =
                         p_aabb_count_in_bin[index_into_view_hash(bin_x, bin_y,
                                                                  bin_z)];
@@ -329,7 +348,7 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                                       .position.z +
                                   p_entities->aabbs[this_entity_index]
                                       .extent.z) -
-                                 world_j) *
+                                 (world_j)) *
                                     20 +
                                 // Sprite's column:
                                 (i - p_entities->aabbs[this_entity_index]
