@@ -226,7 +226,8 @@ void count_entities_in_bins(Entities<entity_count>* p_entities,
         // Place this AABB into every bin that it spans across.
         for (int bin_x = min_x_index; bin_x <= max_x_index; bin_x += 1) {
             for (int bin_y = min_y_index; bin_y < max_y_index; bin_y += 1) {
-                for (int bin_z = min_z_index; bin_z < max_z_index; bin_z += 1) {
+                for (int bin_z = min_z_index; bin_z <= max_z_index;
+                     bin_z += 1) {
                     int this_bin_count =
                         p_aabb_count_in_bin[index_into_view_hash(bin_x, bin_y,
                                                                  bin_z)];
@@ -236,13 +237,15 @@ void count_entities_in_bins(Entities<entity_count>* p_entities,
                                                          sparse_bin_size +
                                                      this_bin_count] = i;
 
+                    p_aabb_bins[index_into_view_hash(bin_x, bin_y, bin_z) *
+                                    sparse_bin_size +
+                                this_bin_count] = this_aabb;
+
                     // Increment the count of `AABB`s in this bin, wrapping
                     // around `sparse_bin_size`. That value is currently `8`.
                     p_aabb_count_in_bin[index_into_view_hash(bin_x, bin_y,
-                                                             bin_z) *
-                                            sparse_bin_size +
-                                        this_bin_count] =
-                        (this_bin_count + 1) & sparse_bin_size;
+                                                             bin_z)] =
+                        (this_bin_count + 1) & (sparse_bin_size - 1);
                 }
             }
         }
@@ -297,7 +300,8 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                      this_bin_entity_index < entities_in_this_bin;
                      this_bin_entity_index += 1) {
                     AABB& this_aabb =
-                        p_aabb_bins[index_into_view_hash(bin_x, bin_y, bin_z) +
+                        p_aabb_bins[index_into_view_hash(bin_x, bin_y, bin_z) *
+                                        sparse_bin_size +
                                     this_bin_entity_index];
 
                     // TODO: If this entity has closer depth.
@@ -308,11 +312,11 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                     // Intersect ray with this aabb.
                     if (i >= this_aabb.position.x &&
                         i < this_aabb.position.x + this_aabb.extent.x) {
-                        // if (true) {
                         if (this_aabb.intersect(this_ray)) {
                             int this_entity_index =
                                 p_aabb_index_to_entity_index_map
-                                    [index_into_view_hash(bin_x, bin_y, bin_z) +
+                                    [index_into_view_hash(bin_x, bin_y, bin_z) *
+                                         sparse_bin_size +
                                      this_bin_entity_index];
 
                             int this_sprite_index =
@@ -374,9 +378,6 @@ escape_ray:
 auto main() -> int {
     auto p_entities = new (std::nothrow) Entities<entity_count>;
 
-    // p_entities is random-access, but the bins they're stored into are
-    // not, so we must store a random-access map to the entities'
-    // attributes.
     int* p_aabb_index_to_entity_index_map =
         new (std::nothrow) int[hash_volume * sparse_bin_size];
 
@@ -495,6 +496,30 @@ auto main() -> int {
         // SDL_RenderClear(p_renderer);
         SDL_RenderCopy(p_renderer, p_sdl_texture, &view_rect, &blit_rect);
         SDL_RenderPresent(p_renderer);
+
+        std::cout << "<" << p_entities->aabbs[0].position.x << ", "
+                  << p_entities->aabbs[0].position.y << ", "
+                  << p_entities->aabbs[0].position.z << ">\n";
+        std::cout
+            << "<"
+            << p_entities->aabbs[0].position.x + p_entities->aabbs[0].extent.x
+            << ", "
+            << p_entities->aabbs[0].position.y + p_entities->aabbs[0].extent.y
+            << ", "
+            << p_entities->aabbs[0].position.z + p_entities->aabbs[0].extent.z
+            << ">\n";
+
+        for (int j = 0; j < hash_height; j++) {
+            for (int k = 0; k < hash_length; k++) {
+                std::cout
+                    << p_aabb_count_in_bin[index_into_view_hash(
+                           p_entities->aabbs[0].position.x / single_bin_area, j,
+                           k)]
+                    << " ";
+            }
+            std::cout << "\n";
+        }
+        std::cout << "\n";
     }
 
 exit_loop:
