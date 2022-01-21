@@ -443,11 +443,12 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                                     // TODO: Magic number `40` is the sprite's
                                     // height.
                                     // Height offset.
-                                    + (40 - sprite_row)
+                                    + std::max(20, 40 - sprite_row)
                                     // Depth offset.
                                     - this_aabb.position.z -
                                     p_entities->sprites[this_entity_index]
-                                        .depth[this_sprite_index];
+                                        .depth[this_sprite_index] -
+                                    (std::max(0, 20 - sprite_row));
 
                                 // Store the pixel with the greatest depth.
                                 if (closest_entity_depth > this_depth) {
