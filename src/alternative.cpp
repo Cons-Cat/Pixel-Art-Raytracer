@@ -385,7 +385,7 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
             };
 
             Pixel this_color = {55, 55, 55};
-            bool has_intersected = false;
+            int intersected_bin_count = 0;
 
             // The hash frustrum's data is stored such that increasing the `z`
             // index finds AABBs with proportionally lower `y` coordinates, so
@@ -396,11 +396,15 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
 
             // `bin_z` is a ray's hash-space position casting forwards.
             for (short bin_z = 0; bin_z < hash_length; bin_z++) {
+                bool has_intersected = false;
                 short bin_y = static_cast<short>(j / single_bin_area);
 
                 int entities_in_this_bin =
                     p_aabb_count_in_bin[index_into_view_hash(bin_x, bin_y,
                                                              bin_z)];
+                if (entities_in_this_bin == 0) {
+                    intersected_bin_count = 0;
+                }
 
                 for (int this_bin_entity_index = 0;
                      this_bin_entity_index < entities_in_this_bin;
@@ -426,55 +430,49 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                                              sparse_bin_size +
                                          this_bin_entity_index];
 
-                                int sprite_row = this_aabb.position.y +
-                                                 this_aabb.extent.y +
-                                                 this_aabb.position.z +
-                                                 this_aabb.extent.z - world_j;
+                                Sprite& this_sprite =
+                                    p_entities->sprites[this_bin_entity_index];
 
-                                int this_sprite_index =
-                                    sprite_row * 20 +
-                                    // Sprite's column:
+                                int sprite_px_row =
+                                    this_aabb.position.y + this_aabb.extent.y +
+                                    this_aabb.position.z + this_aabb.extent.z -
+                                    world_j;
+
+                                int this_sprite_px_index =
+                                    sprite_px_row * 20 +
+                                    // Sprite pixel's column:
                                     (i - this_aabb.position.x);
 
                                 // Depth increases as `y` increases, and it
                                 // decreases as `z` increases.
                                 int this_depth =
-                                    this_aabb.position.y
-                                    // TODO: Magic number `40` is a tile
-                                    // sprite's entire height, and `20` is its
-                                    // maximum world height.
-                                    //
-                                    // Height offset.
-                                    + std::max(20, 40 - sprite_row)
-                                    // Depth offset.
-                                    - this_aabb.position.z -
-                                    p_entities->sprites[this_entity_index]
-                                        .depth[this_sprite_index]
-                                    // TODO: Magic number `20` is the maximum
-                                    // depth of a tile sprite.
-                                    - (std::max(0, 20 - sprite_row));
+                                    this_aabb.position.y -
+                                    this_aabb.position.z
+                                    // Position along this `AABB`'s `y` axis:
+                                    + std::min<int>(
+                                          0, this_aabb.extent.y - sprite_px_row)
+                                    // Position along this `AABB`'s `z` axis:
+                                    - this_sprite.depth[this_sprite_px_index];
 
                                 // Store the pixel with the greatest depth.
-                                if (closest_entity_depth > this_depth) {
+                                if (closest_entity_depth >= this_depth) {
                                     continue;
                                 }
                                 closest_entity_depth = this_depth;
 
                                 this_color = pixel_palette
-                                    [p_entities->sprites[this_entity_index]
-                                         .color[this_sprite_index]];
+                                    [this_sprite.color[this_sprite_px_index]];
 
-                                // TODO: Figure out how to implement an early
-                                // escape condition.
-                                // has_intersected = true;
+                                has_intersected = true;
                             }
                         }
                     }
                 }
+                intersected_bin_count += has_intersected;
 
-                // Do not bother tracing this ray further if something
-                // has already intersected.
-                if (has_intersected) {
+                // Do not bother tracing this ray further if it has intersected
+                // two adjacent bins already.
+                if (intersected_bin_count >= 2) {
                     goto escape_ray;
                 }
             }
