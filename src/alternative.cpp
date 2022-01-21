@@ -635,6 +635,9 @@ auto main() -> int {
             << ", "
             << p_entities->aabbs[0].position.z + p_entities->aabbs[0].extent.z
             << ">\n";
+        static unsigned int last_time = 0u;
+        std::cout << SDL_GetTicks() - last_time << "ms\n";
+        last_time = SDL_GetTicks();
 
         for (int j = 0; j < hash_height; j++) {
             for (int k = 0; k < hash_length; k++) {
