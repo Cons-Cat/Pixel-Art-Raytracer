@@ -270,7 +270,7 @@ constexpr int hash_height = (view_height) / single_bin_area;
 constexpr int hash_length = (view_length) / single_bin_area;
 constexpr int hash_volume = hash_width * hash_height * hash_length;
 
-constexpr int entity_count = 200;
+constexpr int entity_count = view_width * view_length;
 
 // The number of AABBs that can fit inside of a single bin. This is an
 // exponentiation of `2` for pushing into a bin with efficient wrapping
@@ -498,8 +498,6 @@ escape_ray:
 };
 
 auto main() -> int {
-    auto p_entities = new (std::nothrow) Entities<entity_count>;
-
     int* p_aabb_index_to_entity_index_map =
         new (std::nothrow) int[hash_volume * sparse_bin_size];
 
@@ -513,31 +511,31 @@ auto main() -> int {
         return 1;
     }
 
-    srand(time(0));
+    auto p_entities = new (std::nothrow) Entities<entity_count>;
 
-    for (int i = 0; i < entity_count; i++) {
-        // Place entities randomly in world-space, localized around <0,0,0>.
-        int x = (rand() % (view_width * 2)) - view_width / 2;
-        int y = (rand() % (view_height * 2)) - view_height / 2;
-        int z = (rand() % (view_length * 2)) - view_length / 2;
+    for (int i = 0; i < view_width; i++) {
+        for (int j = 0; j < view_length; j++) {
+            int x = i * 20;
+            int y = 10;
+            int z = j * 20;
 
-        Point<short> new_position = {static_cast<short>(x),
-                                     static_cast<short>(y),
-                                     static_cast<short>(z)};
+            Point<short> new_position = {static_cast<short>(x),
+                                         static_cast<short>(y),
+                                         static_cast<short>(z)};
 
-        // An AABB's volume is currently hard-coded to 20^3.
-        p_entities->insert({
-            .aabb = {.position = {new_position.x, new_position.y,
-                                  new_position.z},
-                     .extent = {20, 20, 20}},
-        });
+            p_entities->insert({
+                .aabb = {.position = {new_position.x, new_position.y,
+                                      new_position.z},
+                         .extent = {20, 20, 20}},
+            });
+        }
     }
 
     // Place player character near the center.
     p_entities->aabbs[0].position = {view_width / 2, 0, view_length / 4};
 
-    // TODO: Make a trivial pass-through graphics shader pipeline in Vulkan
-    // to render texture.
+    // TODO: Make a trivial pass-through graphics shader pipeline in
+    // Vulkan to render texture.
 
     SDL_InitSubSystem(SDL_INIT_VIDEO);
 
