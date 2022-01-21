@@ -322,13 +322,14 @@ void count_entities_in_bins(Entities<entity_count>* p_entities,
 
         int max_x_index =
             std::min(hash_width - 1, this_max_x_world / single_bin_area);
-        // `max_y_index` is rounded up to the nearest multiple of `20`.
-        int max_y_index =
-            std::min(hash_height,
-                     (view_height - this_min_y_world - this_min_z_world + 19) /
-                         single_bin_area);
+        int max_y_index = std::min(
+            // `max_y_index` is rounded up to the nearest multiple of `20`.
+            hash_height,
+            (view_height - this_min_y_world - this_min_z_world + 19) /
+                single_bin_area);
+        // `max_z_index` is rounded up to the nearest multiple of `20`.
         int max_z_index =
-            std::min(hash_length, this_max_z_world / single_bin_area);
+            std::min(hash_length, (this_max_z_world + 19) / single_bin_area);
 
         // Place this AABB into every bin that it spans across.
         for (int bin_x = min_x_index; bin_x <= max_x_index; bin_x += 1) {
