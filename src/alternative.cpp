@@ -235,8 +235,10 @@ constexpr Sprite tile_floor = make_tile_floor();
 
 template <int entity_count>
 struct Entities {
-    AABB aabbs[entity_count];
-    Sprite sprites[entity_count];
+    // AABB aabbs[entity_count];
+    // Sprite sprites[entity_count];
+    std::vector<AABB> aabbs;
+    std::vector<Sprite> sprites;
 
     int last_entity_index = 0;
 
@@ -247,9 +249,9 @@ struct Entities {
 
     // TODO: Consider perfect forwarding or move:
     void insert(Entity const entity) {
-        aabbs[last_entity_index] = entity.aabb;
+        aabbs.push_back(entity.aabb);
         // sprites[last_entity_index] = entity.sprite;
-        sprites[last_entity_index] = tile_floor;
+        sprites.push_back(tile_floor);
         last_entity_index += 1;
     }
 
@@ -270,6 +272,7 @@ constexpr int hash_height = (view_height) / single_bin_area;
 constexpr int hash_length = (view_length) / single_bin_area;
 constexpr int hash_volume = hash_width * hash_height * hash_length;
 
+// Currently, this number is no-op.
 constexpr int entity_count = view_width * view_length;
 
 // The number of AABBs that can fit inside of a single bin. This is an
@@ -513,16 +516,74 @@ auto main() -> int {
 
     auto p_entities = new (std::nothrow) Entities<entity_count>;
 
-    for (int i = 0; i < view_width; i++) {
-        for (int j = 0; j < view_length; j++) {
-            int x = i * 20;
-            int y = 10;
-            int z = j * 20;
+    // Insert player:
+    p_entities->insert({
+        .aabb = {.position = {view_width / 2, 36, view_length / 4},
+                 .extent = {20, 20, 20}},
+    });
 
+    // Create graybox world.
+    {
+        for (int i = 0; i < view_width; i++) {
+            for (int j = 0; j < view_length; j++) {
+                int x = (i)*20;
+                int y = 0;
+                int z = j * 20;
+                Point<short> new_position = {static_cast<short>(x),
+                                             static_cast<short>(y),
+                                             static_cast<short>(z)};
+                p_entities->insert({
+                    .aabb = {.position = {new_position.x, new_position.y,
+                                          new_position.z},
+                             .extent = {20, 20, 20}},
+                });
+            }
+        }
+
+        for (int i = 0; i < 6; i++) {
+            for (int j = 0; j < view_length - 10; j++) {
+                for (int k = 1; k < 6; k++) {
+                    if (i >= 4 && k >= 4) {
+                        continue;
+                    }
+                    int x = i * 20;
+                    int y = k * 20;
+                    int z = view_length - j * 20;
+                    Point<short> new_position = {static_cast<short>(x),
+                                                 static_cast<short>(y),
+                                                 static_cast<short>(z)};
+                    p_entities->insert({
+                        .aabb = {.position = {new_position.x, new_position.y,
+                                              new_position.z},
+                                 .extent = {20, 20, 20}},
+                    });
+                }
+            }
+        }
+
+        for (int i = 1; i < 3; i++) {
+            for (int j = 0; j < view_length; j++) {
+                int x = view_width - i * 20;
+                int y = 20;
+                int z = j * 20;
+                Point<short> new_position = {static_cast<short>(x),
+                                             static_cast<short>(y),
+                                             static_cast<short>(z)};
+                p_entities->insert({
+                    .aabb = {.position = {new_position.x, new_position.y,
+                                          new_position.z},
+                             .extent = {20, 20, 20}},
+                });
+            }
+        }
+
+        for (int i = 1; i < 20; i++) {
+            int x = view_width - 40 - i * 20;
+            int y = 20;
+            int z = view_length - 60;
             Point<short> new_position = {static_cast<short>(x),
                                          static_cast<short>(y),
                                          static_cast<short>(z)};
-
             p_entities->insert({
                 .aabb = {.position = {new_position.x, new_position.y,
                                       new_position.z},
@@ -530,9 +591,6 @@ auto main() -> int {
             });
         }
     }
-
-    // Place player character near the center.
-    p_entities->aabbs[0].position = {view_width / 2, 0, view_length / 4};
 
     // TODO: Make a trivial pass-through graphics shader pipeline in
     // Vulkan to render texture.
