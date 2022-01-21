@@ -392,12 +392,11 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
             // decrementing `y` by `z` here is unnecessary.
             int bin_x = i / single_bin_area;
 
+            int closest_entity_depth = std::numeric_limits<int>::min();
+
             // `bin_z` is a ray's hash-space position casting forwards.
             for (short bin_z = 0; bin_z < hash_length; bin_z++) {
                 short bin_y = static_cast<short>(j / single_bin_area);
-
-                // short closest_entity_depth =
-                // std::numeric_limits<short>::max();
 
                 int entities_in_this_bin =
                     p_aabb_count_in_bin[index_into_view_hash(bin_x, bin_y,
@@ -410,11 +409,6 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                         p_aabb_bins[index_into_view_hash(bin_x, bin_y, bin_z) *
                                         sparse_bin_size +
                                     this_bin_entity_index];
-
-                    // TODO: If this entity has closer depth.
-                    // if (this_aabb.min_point.y + (j -
-                    // this_aabb.min_point.y) > closest_entity_depth) {
-                    // }
 
                     // Intersect ray with this aabb.
                     if (i >= this_aabb.position.x &&
@@ -432,29 +426,42 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                                              sparse_bin_size +
                                          this_bin_entity_index];
 
+                                int sprite_row = this_aabb.position.y +
+                                                 this_aabb.extent.y +
+                                                 this_aabb.position.z +
+                                                 this_aabb.extent.z - world_j;
+
                                 int this_sprite_index =
-                                    // Sprite's row:
-                                    ((p_entities->aabbs[this_entity_index]
-                                          .position.y +
-                                      p_entities->aabbs[this_entity_index]
-                                          .extent.y +
-                                      p_entities->aabbs[this_entity_index]
-                                          .position.z +
-                                      p_entities->aabbs[this_entity_index]
-                                          .extent.z) -
-                                     (world_j)) *
-                                        20 +
+                                    sprite_row * 20 +
                                     // Sprite's column:
-                                    (i - p_entities->aabbs[this_entity_index]
-                                             .position.x);
+                                    (i - this_aabb.position.x);
+
+                                // Depth increases as `y` increases, and it
+                                // decreases as `z` increases.
+                                int this_depth =
+                                    this_aabb.position.y
+                                    // TODO: Magic number `40` is the sprite's
+                                    // height.
+                                    // Height offset.
+                                    + (40 - sprite_row)
+                                    // Depth offset.
+                                    - this_aabb.position.z -
+                                    p_entities->sprites[this_entity_index]
+                                        .depth[this_sprite_index];
+
+                                // Store the pixel with the greatest depth.
+                                if (closest_entity_depth > this_depth) {
+                                    continue;
+                                }
+                                closest_entity_depth = this_depth;
 
                                 this_color = pixel_palette
                                     [p_entities->sprites[this_entity_index]
                                          .color[this_sprite_index]];
 
-                                // this_color = {255, 255, 255};
-                                // TODO: Update `closest_entity_depth`.
-                                has_intersected = true;
+                                // TODO: Figure out how to implement an early
+                                // escape condition.
+                                // has_intersected = true;
                             }
                         }
                     }
@@ -611,6 +618,7 @@ auto main() -> int {
         SDL_RenderCopy(p_renderer, p_sdl_texture, &view_rect, &blit_rect);
         SDL_RenderPresent(p_renderer);
 
+#ifndef __OPTIMIZE__
         std::cout << "<" << p_entities->aabbs[0].position.x << ", "
                   << p_entities->aabbs[0].position.y << ", "
                   << p_entities->aabbs[0].position.z << ">\n";
@@ -634,6 +642,7 @@ auto main() -> int {
             std::cout << "\n";
         }
         std::cout << "\n";
+#endif
     }
 
 exit_loop:
