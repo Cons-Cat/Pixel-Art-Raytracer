@@ -570,22 +570,22 @@ auto main() -> int {
                 case SDL_KEYDOWN:
                     switch (event.key.keysym.sym) {
                         case SDLK_LEFT:
-                            p_entities->aabbs[0].position.x -= 5;
+                            p_entities->aabbs[0].position.x -= 2;
                             break;
                         case SDLK_RIGHT:
-                            p_entities->aabbs[0].position.x += 5;
+                            p_entities->aabbs[0].position.x += 2;
                             break;
                         case SDLK_UP:
-                            p_entities->aabbs[0].position.z += 5;
+                            p_entities->aabbs[0].position.z += 2;
                             break;
                         case SDLK_DOWN:
-                            p_entities->aabbs[0].position.z -= 5;
+                            p_entities->aabbs[0].position.z -= 2;
                             break;
                         case SDLK_PAGEDOWN:
-                            p_entities->aabbs[0].position.y -= 5;
+                            p_entities->aabbs[0].position.y -= 2;
                             break;
                         case SDLK_PAGEUP:
-                            p_entities->aabbs[0].position.y += 5;
+                            p_entities->aabbs[0].position.y += 2;
                             break;
                         default:
                             break;
@@ -635,9 +635,6 @@ auto main() -> int {
             << ", "
             << p_entities->aabbs[0].position.z + p_entities->aabbs[0].extent.z
             << ">\n";
-        static unsigned int last_time = 0u;
-        std::cout << SDL_GetTicks() - last_time << "ms\n";
-        last_time = SDL_GetTicks();
 
         for (int j = 0; j < hash_height; j++) {
             for (int k = 0; k < hash_length; k++) {
@@ -649,8 +646,11 @@ auto main() -> int {
             }
             std::cout << "\n";
         }
-        std::cout << "\n";
 #endif
+
+        static unsigned int last_time = 0u;
+        std::cout << SDL_GetTicks() - last_time << "ms\n\n";
+        last_time = SDL_GetTicks();
     }
 
 exit_loop:
