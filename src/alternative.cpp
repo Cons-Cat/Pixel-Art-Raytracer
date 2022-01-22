@@ -243,7 +243,7 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                     },
             };
 
-            Pixel this_color = {255 / 2, 255 / 2, 255 / 2};
+            Pixel this_color = {.color = {255 / 2, 255 / 2, 255 / 2}};
             int intersected_bin_count = 0;
 
             // The hash frustrum's data is stored such that increasing the `z`
