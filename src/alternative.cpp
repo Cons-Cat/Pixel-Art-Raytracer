@@ -519,8 +519,16 @@ auto main() -> int {
         trace_hash(p_entities, p_aabb_bins, p_aabb_count_in_bin,
                    p_aabb_index_to_entity_index_map, p_pixel_buffer);
 
-        for (int pixel = 0; pixel < view_height * view_width; pixel++) {
-            p_texture[pixel] = p_pixel_buffer[pixel].color;
+        Vector directional_light = Vector{-1.f, -1.f, -1.f}.normalize();
+        float ambient_light = 0.5f;
+        for (int i = 0; i < view_height * view_width; i++) {
+            Pixel& this_pixel = p_pixel_buffer[i];
+            Vector normal = this_pixel.normal;
+            p_texture[i] = this_pixel.color *
+                           std::min<float>(ambient_light,
+                                           normal.x * directional_light.x +
+                                               normal.y * directional_light.y +
+                                               normal.z * directional_light.z);
         }
 
         int texture_pitch;

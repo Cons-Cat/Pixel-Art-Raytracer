@@ -4,19 +4,40 @@
 
 struct Color {
     unsigned char red, green, blue, alpha;
+
+    auto operator*(float value) -> Color {
+        return Color{.red = static_cast<unsigned char>(
+                         static_cast<float>(this->red) * value),
+                     .green = static_cast<unsigned char>(
+                         static_cast<float>(this->green) * value),
+                     .blue = static_cast<unsigned char>(
+                         static_cast<float>(this->blue) * value),
+                     .alpha = this->alpha};
+    }
 };
 
-// `Normal` holds signed bytes which represent a three-dimensional slope that is
-// its orientation.
-struct Normal {
-    signed char x, y, z;
+// `Vector` holds three `float`s which represent its orientation.
+struct Vector {
+    float x, y, z;
+
+    auto magnitude() -> float {
+        return std::abs(x) + std::abs(y) + std::abs(z);
+    }
+
+    auto normalize() -> Vector {
+        float length = std::abs(x) + std::abs(y) + std::abs(z);
+        return Vector{
+            .x = x / length,
+            .y = y / length,
+            .z = z / length,
+        };
+    }
 
     operator Color() const {
-        float length =
-            static_cast<float>(std::abs(x) + std::abs(y) + std::abs(z));
-        float positive_x = static_cast<float>(x) + length;
-        float positive_y = static_cast<float>(y) + length;
-        float positive_z = static_cast<float>(z) + length;
+        float length = std::abs(x) + std::abs(y) + std::abs(z);
+        float positive_x = x + length;
+        float positive_y = y + length;
+        float positive_z = z + length;
         float normal_length = positive_x + positive_y + positive_z;
         float normal_x = positive_x / normal_length;
         float normal_y = positive_y / normal_length;
@@ -30,7 +51,7 @@ struct Normal {
 
 struct Pixel {
     int y, z;
-    Normal normal;
+    Vector normal;
     Color color;
 };
 
@@ -44,7 +65,7 @@ Color color_palette[] = {
 struct Sprite {
     std::array<int, 20 * 40> color;
     std::array<int, 20 * 40> depth;
-    std::array<Normal, 20 * 40> normal;
+    std::array<Vector, 20 * 40> normal;
 };
 
 constexpr auto make_tile_floor = []() -> Sprite {
@@ -174,7 +195,7 @@ constexpr auto make_tile_floor = []() -> Sprite {
         0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  //
     };
 
-    constexpr std::array<Normal, 20 * 40> normal = {{
+    constexpr std::array<Vector, 20 * 40> normal = {{
         {0, 1, 0},  {0, 1, 0},  {0, 1, 0},  {0, 1, 0},  {0, 1, 0},
         {0, 1, 0},  {0, 1, 0},  {0, 1, 0},  {0, 1, 0},  {0, 1, 0},
         {0, 1, 0},  {0, 1, 0},  {0, 1, 0},  {0, 1, 0},  {0, 1, 0},
