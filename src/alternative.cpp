@@ -243,7 +243,7 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                     },
             };
 
-            Pixel this_color = {55, 55, 55};
+            Pixel this_color = {255 / 2, 255 / 2, 255 / 2};
             int intersected_bin_count = 0;
 
             // The hash frustrum's data is stored such that increasing the `z`
@@ -319,8 +319,12 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                                 }
                                 closest_entity_depth = this_depth;
 
-                                this_color = pixel_palette
+                                this_color.color = color_palette
                                     [this_sprite.color[this_sprite_px_index]];
+                                this_color.y = world_j;
+                                this_color.z =
+                                    this_aabb.position.z +
+                                    this_sprite.depth[this_sprite_px_index];
 
                                 has_intersected = true;
                             }
@@ -365,10 +369,11 @@ auto main() -> int {
 
     AABB* p_aabb_bins = new (std::nothrow) AABB[hash_volume * sparse_bin_size];
 
-    Pixel* p_texture = new (std::nothrow) Pixel[view_height * view_width];
-    if (p_texture == nullptr) {
+    Pixel* p_pixel_buffer = new (std::nothrow) Pixel[view_height * view_width];
+    if (p_pixel_buffer == nullptr) {
         return 1;
     }
+    Color* p_texture = new (std::nothrow) Color[view_height * view_width];
 
     auto p_entities = new (std::nothrow) Entities<entity_count>;
 
@@ -463,7 +468,7 @@ auto main() -> int {
         SDL_CreateTexture(p_renderer, SDL_PIXELFORMAT_RGB888,
                           SDL_TEXTUREACCESS_STREAMING, view_width, view_height);
 
-    Pixel* p_blit = new (std::nothrow) Pixel[view_width * view_height];
+    Color* p_blit = new (std::nothrow) Color[view_width * view_height];
     void** p_blit_address = static_cast<void**>(static_cast<void*>(&p_blit));
 
     while (true) {
@@ -510,24 +515,24 @@ auto main() -> int {
         count_entities_in_bins(p_entities, p_aabb_bins, p_aabb_count_in_bin,
                                p_aabb_index_to_entity_index_map);
         trace_hash(p_entities, p_aabb_bins, p_aabb_count_in_bin,
-                   p_aabb_index_to_entity_index_map, p_texture);
+                   p_aabb_index_to_entity_index_map, p_pixel_buffer);
+
+        for (int pixel = 0; pixel < view_height * view_width; pixel++) {
+            p_texture[pixel] = p_pixel_buffer[pixel].color;
+        }
 
         int texture_pitch;
         SDL_LockTexture(p_sdl_texture, nullptr, p_blit_address, &texture_pitch);
         for (int row = 0; row < view_height; row++) {
-            // Reset texture to gray.
-            memset(static_cast<char*>(static_cast<void*>(p_blit)) +
-                       row * texture_pitch,
-                   256 / 2, 1920);
             memcpy(static_cast<char*>(static_cast<void*>(p_blit)) +
                        row * texture_pitch,
-                   p_texture + row * view_width, view_width * sizeof(Pixel));
+                   p_texture + row * view_width, view_width * sizeof(Color));
         }
         SDL_UnlockTexture(p_sdl_texture);
 
         SDL_Rect view_rect = {0, 0, view_width, view_height};
         SDL_Rect blit_rect = {
-            0, 0, static_cast<int>(texture_pitch / sizeof(Pixel)), view_height};
+            0, 0, static_cast<int>(texture_pitch / sizeof(Color)), view_height};
 
         // SDL_RenderClear(p_renderer);
         SDL_RenderCopy(p_renderer, p_sdl_texture, &view_rect, &blit_rect);

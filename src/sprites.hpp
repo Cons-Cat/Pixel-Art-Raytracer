@@ -1,14 +1,20 @@
 #include <array>
 
-struct Pixel {
-    unsigned char red, green, blue, alpha;
-};
-
 struct Normal {
     signed char x, y, z;
 };
 
-Pixel pixel_palette[] = {
+struct Color {
+    unsigned char red, green, blue, alpha;
+};
+
+struct Pixel {
+    int y, z;
+    Normal normal;
+    Color color;
+};
+
+Color color_palette[] = {
     {100, 100, 100},  // Dark
     {140, 140, 140},  // Dark gray
     {200, 200, 200},  // Bright gray
