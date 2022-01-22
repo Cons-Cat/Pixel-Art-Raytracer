@@ -325,6 +325,8 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                                 this_color.z =
                                     this_aabb.position.z +
                                     this_sprite.depth[this_sprite_px_index];
+                                this_color.normal =
+                                    this_sprite.normal[this_sprite_px_index];
 
                                 has_intersected = true;
                             }
