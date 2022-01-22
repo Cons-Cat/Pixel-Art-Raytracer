@@ -389,9 +389,15 @@ auto main() -> int {
     {
         for (int i = 0; i < view_width; i++) {
             for (int j = 0; j < view_length; j++) {
-                int x = (i)*20;
+                int x = i * 20;
                 int y = 0;
                 int z = j * 20;
+
+                if (x >= view_width / 2 - 40 && x < view_width / 2 + 40 &&
+                    z < view_length / 2 + 40 && z > view_length / 2 - 40) {
+                    continue;
+                }
+
                 Point<short> new_position = {static_cast<short>(x),
                                              static_cast<short>(y),
                                              static_cast<short>(z)};
