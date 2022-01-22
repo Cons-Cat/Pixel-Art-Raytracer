@@ -34,4 +34,5 @@ target_compile_definitions(alternative PRIVATE Release=$<CONFIG:Release>)
 target_link_libraries(alternative PRIVATE lava::app)
 target_link_libraries(alternative PRIVATE ${SDL2_LIBRARIES})
 target_sources(alternative PRIVATE
-  src/shared_behavior.hpp)
+  src/shared_behavior.hpp
+  src/sprites.hpp)
