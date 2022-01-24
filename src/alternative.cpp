@@ -484,7 +484,7 @@ auto main() -> int {
     };
 
     std::vector<Light> lights;
-    lights.push_back({.x = 600, .y = 40, .z = 100});
+    lights.push_back({.x = 520, .y = 180, .z = -30});
 
     while (true) {
         SDL_Event event;
@@ -494,6 +494,12 @@ auto main() -> int {
                     switch (event.key.keysym.sym) {
                         case SDLK_ESCAPE:
                             goto exit_loop;
+                            break;
+                        case SDLK_a:
+                            lights[0].z -= 5;
+                            break;
+                        case SDLK_k:
+                            lights[0].z += 5;
                             break;
                     }
                     break;
@@ -541,9 +547,10 @@ auto main() -> int {
             int world_y = this_pixel.y;
             int world_z = this_pixel.z;
 
+            // TODO: This isn't actually the incident vector.
             Vector incident_light =
                 Vector{.x = static_cast<float>(lights[0].x - world_x),
-                       .y = -static_cast<float>(lights[0].y - world_y),
+                       .y = static_cast<float>(lights[0].y - world_y),
                        .z = static_cast<float>(lights[0].z - world_z)}
                     .normalize();
 
@@ -560,37 +567,54 @@ auto main() -> int {
                     .y = static_cast<short>(1.f / incident_light.y),
                     .z = static_cast<short>(1.f / incident_light.z)}};
 
-            int pixel_bin_x = world_x / single_bin_area;
-            int pixel_bin_y = world_y / single_bin_area;
-            int pixel_bin_z = world_z / single_bin_area;
+            int ray_bin_x = world_x / single_bin_area;
+            int ray_bin_y = world_y / single_bin_area;
+            int ray_bin_z = world_z / single_bin_area;
             p_texture[i] = this_pixel.color * ambient_light;
 
-            int light_bin_x = lights[0].x / single_bin_area;
-            int light_bin_y = lights[0].y / single_bin_area;
-            int light_bin_z = lights[0].z / single_bin_area;
+            int const light_bin_x = lights[0].x / single_bin_area;
+            int const light_bin_y = lights[0].y / single_bin_area;
+            int const light_bin_z = lights[0].z / single_bin_area;
 
-            while (true) {
-                int bin_index = world_to_view_hash_index(
-                    pixel_bin_x, pixel_bin_y, pixel_bin_z);
+            int light_bin =
+                world_to_view_hash_index(lights[0].x, lights[0].y, lights[0].z);
+
+            while (index_into_view_hash(ray_bin_x, ray_bin_y, ray_bin_z) !=
+                   light_bin) {
+                break;
+                int bin_index =
+                    index_into_view_hash(ray_bin_x, ray_bin_y, ray_bin_z);
                 for (int count = 0; count < p_aabb_count_in_bin[bin_index];
                      count++) {
                     AABB& this_aabb = p_aabb_bins[bin_index + count];
+
+                    // Skip color blending for this light source if it is
+                    // obstructed.
                     if (this_aabb.intersect(this_ray)) {
                         goto light_ray_obstructed;
                     }
                 }
 
-                pixel_bin_x += dir_x;
-                pixel_bin_y += dir_y;
-                pixel_bin_z += dir_z;
+                // TODO: Proper ray travelling.
+                ray_bin_x += dir_x;
+                ray_bin_y += dir_y;
+                ray_bin_z += dir_z;
 
-                if (pixel_bin_x > light_bin_x) {
+                // Assume nothing obstructs the ray outside of view.
+                if (ray_bin_x >= view_width / single_bin_area ||
+                    ray_bin_y >= view_height / single_bin_area ||
+                    ray_bin_z >= view_length / single_bin_area) {
                     break;
                 }
-                if (pixel_bin_y > light_bin_y) {
+
+                // TODO: Proper escape condition.
+                if (ray_bin_x >= light_bin_x || ray_bin_x < 0) {
                     break;
                 }
-                if (pixel_bin_z > light_bin_z) {
+                if (ray_bin_y >= light_bin_y || ray_bin_y < 0) {
+                    break;
+                }
+                if (ray_bin_z >= light_bin_z || ray_bin_z < 0) {
                     break;
                 }
             }
@@ -604,7 +628,7 @@ auto main() -> int {
                                                 (normal.x * incident_light.x +
                                                  normal.y * incident_light.y +
                                                  normal.z * incident_light.z) *
-                                                    2));
+                                                    2.f));
         }
 
 light_ray_obstructed:
