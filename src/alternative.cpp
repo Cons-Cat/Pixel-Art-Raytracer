@@ -143,6 +143,10 @@ auto world_to_view_hash_index(int x, int y, int z) -> int {
     return index_into_view_hash(int_x, int_y, int_z);
 }
 
+auto trace_ray(Ray ray) -> bool {
+    return false;
+}
+
 // TODO total aabb count.
 AABB* p_aabb_flatbins = new (std::nothrow) AABB[hash_volume];
 int total_entities_in_bins = 0;
@@ -548,40 +552,37 @@ auto main() -> int {
             int world_z = this_pixel.z;
 
             // TODO: This isn't actually the incident vector.
-            Vector incident_light =
+            Vector towards_light =
                 Vector{.x = static_cast<float>(lights[0].x - world_x),
                        .y = static_cast<float>(lights[0].y - world_y),
                        .z = static_cast<float>(lights[0].z - world_z)}
                     .normalize();
 
-            int dir_x = incident_light.x >= 0.f ? 1 : -1;
-            int dir_y = incident_light.y >= 0.f ? 1 : -1;
-            int dir_z = incident_light.z >= 0.f ? 1 : -1;
+            int dir_x = towards_light.x >= 0.f ? 1 : -1;
+            int dir_y = towards_light.y >= 0.f ? 1 : -1;
+            int dir_z = towards_light.z >= 0.f ? 1 : -1;
 
             Ray this_ray = {
                 .origin = {static_cast<short>(world_x),
                            static_cast<short>(world_y),
                            static_cast<short>(world_z)},
                 .direction_inverse = {
-                    .x = static_cast<short>(1.f / incident_light.x),
-                    .y = static_cast<short>(1.f / incident_light.y),
-                    .z = static_cast<short>(1.f / incident_light.z)}};
+                    .x = static_cast<short>(1.f / (towards_light.x)),
+                    .y = static_cast<short>(1.f / (towards_light.y)),
+                    .z = static_cast<short>(1.f / (towards_light.z))}};
 
-            int ray_bin_x = world_x / single_bin_area;
-            int ray_bin_y = world_y / single_bin_area;
-            int ray_bin_z = world_z / single_bin_area;
-            p_texture[i] = this_pixel.color * ambient_light;
-
-            int const light_bin_x = lights[0].x / single_bin_area;
-            int const light_bin_y = lights[0].y / single_bin_area;
-            int const light_bin_z = lights[0].z / single_bin_area;
+            int ray_bin_x = world_x / single_bin_area + 1;
+            int ray_bin_y = world_y / single_bin_area + 1;
+            int ray_bin_z = world_z / single_bin_area + 1;
 
             int light_bin =
                 world_to_view_hash_index(lights[0].x, lights[0].y, lights[0].z);
 
+            // Set the texture to an ambient color by default.
+            p_texture[i] = this_pixel.color * ambient_light;
+
             while (index_into_view_hash(ray_bin_x, ray_bin_y, ray_bin_z) !=
                    light_bin) {
-                break;
                 int bin_index =
                     index_into_view_hash(ray_bin_x, ray_bin_y, ray_bin_z);
                 for (int count = 0; count < p_aabb_count_in_bin[bin_index];
@@ -591,6 +592,7 @@ auto main() -> int {
                     // Skip color blending for this light source if it is
                     // obstructed.
                     if (this_aabb.intersect(this_ray)) {
+                        std::cout << "Intersect at: " << bin_index << "\n ";
                         goto light_ray_obstructed;
                     }
                 }
@@ -602,19 +604,11 @@ auto main() -> int {
 
                 // Assume nothing obstructs the ray outside of view.
                 if (ray_bin_x >= view_width / single_bin_area ||
+                    ray_bin_x < 0 ||
                     ray_bin_y >= view_height / single_bin_area ||
-                    ray_bin_z >= view_length / single_bin_area) {
-                    break;
-                }
-
-                // TODO: Proper escape condition.
-                if (ray_bin_x >= light_bin_x || ray_bin_x < 0) {
-                    break;
-                }
-                if (ray_bin_y >= light_bin_y || ray_bin_y < 0) {
-                    break;
-                }
-                if (ray_bin_z >= light_bin_z || ray_bin_z < 0) {
+                    ray_bin_y < 0 ||
+                    ray_bin_z >= view_length / single_bin_area ||
+                    ray_bin_z < 0) {
                     break;
                 }
             }
@@ -625,9 +619,9 @@ auto main() -> int {
                 // light source's incident vector.
                 std::min<float>(1.f,
                                 std::max<float>(ambient_light,
-                                                (normal.x * incident_light.x +
-                                                 normal.y * incident_light.y +
-                                                 normal.z * incident_light.z) *
+                                                (normal.x * towards_light.x +
+                                                 normal.y * towards_light.y +
+                                                 normal.z * towards_light.z) *
                                                     2.f));
         }
 
