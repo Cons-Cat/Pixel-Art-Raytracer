@@ -82,17 +82,10 @@ struct alignas(16) AABB {
 // Alignment pads this out from 12 bytes to 16.
 static_assert(sizeof(AABB) == 16);
 
-constexpr Sprite tile_floor = make_tile_floor();
-
-// constexpr auto make_tile_front = []() -> Sprite {
-//     return {};
-// };
-// constexpr Sprite tile_front = make_tile_floor();
+constexpr Sprite tile_single = make_tile_floor();
 
 template <int entity_count>
 struct Entities {
-    // AABB aabbs[entity_count];
-    // Sprite sprites[entity_count];
     std::vector<AABB> aabbs;
     std::vector<Sprite> sprites;
 
@@ -106,8 +99,7 @@ struct Entities {
     // TODO: Consider perfect forwarding or move:
     void insert(Entity const entity) {
         aabbs.push_back(entity.aabb);
-        // sprites[last_entity_index] = entity.sprite;
-        sprites.push_back(tile_floor);
+        sprites.push_back(tile_single);
         last_entity_index += 1;
     }
 
@@ -225,7 +217,6 @@ void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
     // rightwards.
     for (short i = 0; i < view_width; i++) {
         // `j` is a ray's `y` world-position, iterating upwards.
-        // for (short j = view_height - 1; j >= 0; j--) {
         for (short j = 0; j < view_height; j++) {
             short world_j = static_cast<short>(view_height - j);
             Ray this_ray = {
@@ -550,7 +541,6 @@ auto main() -> int {
         SDL_Rect blit_rect = {
             0, 0, static_cast<int>(texture_pitch / sizeof(Color)), view_height};
 
-        // SDL_RenderClear(p_renderer);
         SDL_RenderCopy(p_renderer, p_sdl_texture, &view_rect, &blit_rect);
         SDL_RenderPresent(p_renderer);
 
