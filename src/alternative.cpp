@@ -136,6 +136,13 @@ auto index_into_view_hash(int x, int y, int z) -> int {
     return (x * hash_height * hash_length) + (y * hash_length) + z;
 }
 
+auto world_to_view_hash_index(int x, int y, int z) -> int {
+    int int_x = std::max(0, std::min(view_width, x / single_bin_area));
+    int int_y = std::max(0, std::min(view_height, y / single_bin_area));
+    int int_z = std::max(0, std::min(view_length, z / single_bin_area));
+    return index_into_view_hash(int_x, int_y, int_z);
+}
+
 // TODO total aabb count.
 AABB* p_aabb_flatbins = new (std::nothrow) AABB[hash_volume];
 int total_entities_in_bins = 0;
@@ -525,15 +532,69 @@ auto main() -> int {
         trace_hash(p_entities, p_aabb_bins, p_aabb_count_in_bin,
                    p_aabb_index_to_entity_index_map, p_pixel_buffer);
 
-        float ambient_light = 0.5f;
+        float ambient_light = 0.25f;
         for (int i = 0; i < view_height * view_width; i++) {
             Pixel& this_pixel = p_pixel_buffer[i];
             Vector normal = this_pixel.normal;
+
+            int world_x = i % view_width;
+            int world_y = this_pixel.y;
+            int world_z = this_pixel.z;
+
             Vector incident_light =
-                Vector{.x = static_cast<float>(lights[0].x - (i % view_width)),
-                       .y = -static_cast<float>(lights[0].y - this_pixel.y),
-                       .z = static_cast<float>(lights[0].z - this_pixel.z)}
+                Vector{.x = static_cast<float>(lights[0].x - world_x),
+                       .y = -static_cast<float>(lights[0].y - world_y),
+                       .z = static_cast<float>(lights[0].z - world_z)}
                     .normalize();
+
+            int dir_x = incident_light.x >= 0.f ? 1 : -1;
+            int dir_y = incident_light.y >= 0.f ? 1 : -1;
+            int dir_z = incident_light.z >= 0.f ? 1 : -1;
+
+            Ray this_ray = {
+                .origin = {static_cast<short>(world_x),
+                           static_cast<short>(world_y),
+                           static_cast<short>(world_z)},
+                .direction_inverse = {
+                    .x = static_cast<short>(1.f / incident_light.x),
+                    .y = static_cast<short>(1.f / incident_light.y),
+                    .z = static_cast<short>(1.f / incident_light.z)}};
+
+            int pixel_bin_x = world_x / single_bin_area;
+            int pixel_bin_y = world_y / single_bin_area;
+            int pixel_bin_z = world_z / single_bin_area;
+            p_texture[i] = this_pixel.color * ambient_light;
+
+            int light_bin_x = lights[0].x / single_bin_area;
+            int light_bin_y = lights[0].y / single_bin_area;
+            int light_bin_z = lights[0].z / single_bin_area;
+
+            while (true) {
+                int bin_index = world_to_view_hash_index(
+                    pixel_bin_x, pixel_bin_y, pixel_bin_z);
+                for (int count = 0; count < p_aabb_count_in_bin[bin_index];
+                     count++) {
+                    AABB& this_aabb = p_aabb_bins[bin_index + count];
+                    if (this_aabb.intersect(this_ray)) {
+                        goto light_ray_obstructed;
+                    }
+                }
+
+                pixel_bin_x += dir_x;
+                pixel_bin_y += dir_y;
+                pixel_bin_z += dir_z;
+
+                if (pixel_bin_x > light_bin_x) {
+                    break;
+                }
+                if (pixel_bin_y > light_bin_y) {
+                    break;
+                }
+                if (pixel_bin_z > light_bin_z) {
+                    break;
+                }
+            }
+
             p_texture[i] =
                 this_pixel.color *
                 // Get the dot product of this pixel's normal and a
@@ -546,6 +607,7 @@ auto main() -> int {
                                                     2));
         }
 
+light_ray_obstructed:
         int texture_pitch;
         SDL_LockTexture(p_sdl_texture, nullptr, p_blit_address, &texture_pitch);
         for (int row = 0; row < view_height; row++) {
