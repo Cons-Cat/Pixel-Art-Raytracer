@@ -13,6 +13,7 @@
 #include <limits>
 #include <new>
 #include <string>
+#include <type_traits>
 
 #include "./sprites.hpp"
 
@@ -470,6 +471,14 @@ auto main() -> int {
     Color* p_blit = new (std::nothrow) Color[view_width * view_height];
     void** p_blit_address = static_cast<void**>(static_cast<void*>(&p_blit));
 
+    using Light = struct Light {
+        short x, y, z;
+        short radius = 10;
+    };
+
+    std::vector<Light> lights;
+    lights.push_back({.x = 600, .y = 40, .z = 100});
+
     while (true) {
         SDL_Event event;
         if (SDL_PollEvent(&event)) {
@@ -516,16 +525,25 @@ auto main() -> int {
         trace_hash(p_entities, p_aabb_bins, p_aabb_count_in_bin,
                    p_aabb_index_to_entity_index_map, p_pixel_buffer);
 
-        Vector directional_light = Vector{-1.f, -1.f, -1.f}.normalize();
         float ambient_light = 0.5f;
         for (int i = 0; i < view_height * view_width; i++) {
             Pixel& this_pixel = p_pixel_buffer[i];
             Vector normal = this_pixel.normal;
-            p_texture[i] = this_pixel.color *
-                           std::min<float>(ambient_light,
-                                           normal.x * directional_light.x +
-                                               normal.y * directional_light.y +
-                                               normal.z * directional_light.z);
+            Vector incident_light =
+                Vector{.x = static_cast<float>(lights[0].x - (i % view_width)),
+                       .y = -static_cast<float>(lights[0].y - this_pixel.y),
+                       .z = static_cast<float>(lights[0].z - this_pixel.z)}
+                    .normalize();
+            p_texture[i] =
+                this_pixel.color *
+                // Get the dot product of this pixel's normal and a
+                // light source's incident vector.
+                std::min<float>(1.f,
+                                std::max<float>(ambient_light,
+                                                (normal.x * incident_light.x +
+                                                 normal.y * incident_light.y +
+                                                 normal.z * incident_light.z) *
+                                                    2));
         }
 
         int texture_pitch;
