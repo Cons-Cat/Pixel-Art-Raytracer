@@ -143,7 +143,20 @@ auto world_to_view_hash_index(int x, int y, int z) -> int {
     return index_into_view_hash(int_x, int_y, int_z);
 }
 
-auto trace_ray(Ray ray) -> bool {
+auto trace_hash_for_light(int* p_aabb_count_in_bin, int x_start, int y_start,
+                          int z_start, int x_end, int y_end, int z_end)
+    -> bool {
+    // 1. Get start and end coords.
+    // 2. While stepping through hash:
+    /// 3. If bin count > 0:
+    //// 4. return true.
+    // 5. When done, return false.
+    for (int i = x_start + 1; i <= x_end; i++) {
+        if (p_aabb_count_in_bin[index_into_view_hash(i, y_start, z_start)] >
+            0) {
+            return true;
+        }
+    }
     return false;
 }
 
@@ -222,9 +235,10 @@ void count_entities_in_bins(Entities<entity_count>* p_entities,
     }
 };
 
-void trace_hash(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
-                int* p_aabb_count_in_bin, int* p_aabb_index_to_entity_index_map,
-                Pixel* p_texture) {
+void trace_hash_for_color(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
+                          int* p_aabb_count_in_bin,
+                          int* p_aabb_index_to_entity_index_map,
+                          Pixel* p_texture) {
     // `i` is a ray's `x` world-position ground, iterating
     // rightwards.
     for (short i = 0; i < view_width; i++) {
@@ -539,8 +553,8 @@ auto main() -> int {
                hash_volume * sizeof(decltype(*p_aabb_count_in_bin)));
         count_entities_in_bins(p_entities, p_aabb_bins, p_aabb_count_in_bin,
                                p_aabb_index_to_entity_index_map);
-        trace_hash(p_entities, p_aabb_bins, p_aabb_count_in_bin,
-                   p_aabb_index_to_entity_index_map, p_pixel_buffer);
+        trace_hash_for_color(p_entities, p_aabb_bins, p_aabb_count_in_bin,
+                             p_aabb_index_to_entity_index_map, p_pixel_buffer);
 
         float ambient_light = 0.25f;
         for (int i = 0; i < view_height * view_width; i++) {
@@ -571,46 +585,30 @@ auto main() -> int {
                     .y = static_cast<short>(1.f / (towards_light.y)),
                     .z = static_cast<short>(1.f / (towards_light.z))}};
 
-            int ray_bin_x = world_x / single_bin_area + 1;
-            int ray_bin_y = world_y / single_bin_area + 1;
-            int ray_bin_z = world_z / single_bin_area + 1;
+            int ray_bin_x = world_x / single_bin_area;
+            int ray_bin_y = world_y / single_bin_area;
+            int ray_bin_z = world_z / single_bin_area;
 
-            int light_bin =
-                world_to_view_hash_index(lights[0].x, lights[0].y, lights[0].z);
+            int light_bin_x = std::max(
+                0, std::min(hash_width, lights[0].x / single_bin_area));
+            int light_bin_y =
+                std::max(0,
+                         std::min(hash_height, lights[0].y / single_bin_area)) -
+                1;
+            int light_bin_z = std::max(
+                0, std::min(hash_length, lights[0].z / single_bin_area));
+
+            // int light_bin =
+            //     world_to_view_hash_index(lights[0].x, lights[0].y,
+            //     lights[0].z);
 
             // Set the texture to an ambient color by default.
             p_texture[i] = this_pixel.color * ambient_light;
 
-            while (index_into_view_hash(ray_bin_x, ray_bin_y, ray_bin_z) !=
-                   light_bin) {
-                int bin_index =
-                    index_into_view_hash(ray_bin_x, ray_bin_y, ray_bin_z);
-                for (int count = 0; count < p_aabb_count_in_bin[bin_index];
-                     count++) {
-                    AABB& this_aabb = p_aabb_bins[bin_index + count];
-
-                    // Skip color blending for this light source if it is
-                    // obstructed.
-                    if (this_aabb.intersect(this_ray)) {
-                        std::cout << "Intersect at: " << bin_index << "\n ";
-                        goto light_ray_obstructed;
-                    }
-                }
-
-                // TODO: Proper ray travelling.
-                ray_bin_x += dir_x;
-                ray_bin_y += dir_y;
-                ray_bin_z += dir_z;
-
-                // Assume nothing obstructs the ray outside of view.
-                if (ray_bin_x >= view_width / single_bin_area ||
-                    ray_bin_x < 0 ||
-                    ray_bin_y >= view_height / single_bin_area ||
-                    ray_bin_y < 0 ||
-                    ray_bin_z >= view_length / single_bin_area ||
-                    ray_bin_z < 0) {
-                    break;
-                }
+            if (trace_hash_for_light(p_aabb_count_in_bin, ray_bin_x, ray_bin_y,
+                                     ray_bin_z, light_bin_x, light_bin_y,
+                                     light_bin_z)) {
+                goto light_ray_obstructed;
             }
 
             p_texture[i] =
@@ -623,9 +621,10 @@ auto main() -> int {
                                                  normal.y * towards_light.y +
                                                  normal.z * towards_light.z) *
                                                     2.f));
+light_ray_obstructed:
+            continue;
         }
 
-light_ray_obstructed:
         int texture_pitch;
         SDL_LockTexture(p_sdl_texture, nullptr, p_blit_address, &texture_pitch);
         for (int row = 0; row < view_height; row++) {
