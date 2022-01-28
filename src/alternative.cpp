@@ -12,14 +12,15 @@
 #include <iostream>
 #include <limits>
 #include <new>
+#include <numeric>
 #include <string>
 #include <type_traits>
 
 #include "./sprites.hpp"
 
-template <typename Int>
+template <typename T>
 struct Point {
-    Int x, y, z;
+    T x, y, z;
 };
 
 struct Ray {
@@ -143,20 +144,46 @@ auto world_to_view_hash_index(int x, int y, int z) -> int {
     return index_into_view_hash(int_x, int_y, int_z);
 }
 
-auto trace_hash_for_light(int* p_aabb_count_in_bin, int x_start, int y_start,
-                          int z_start, int x_end, int y_end, int z_end)
-    -> bool {
-    // 1. Get start and end coords.
-    // 2. While stepping through hash:
-    /// 3. If bin count > 0:
-    //// 4. return true.
-    // 5. When done, return false.
-    for (int i = x_start + 1; i <= x_end; i++) {
-        if (p_aabb_count_in_bin[index_into_view_hash(i, y_start, z_start)] >
-            0) {
+auto trace_hash_for_light(int* p_aabb_count_in_bin, int const bin_x_start,
+                          int const bin_y_start, int const bin_z_start,
+                          int const bin_x_end, int const bin_y_end,
+                          int const bin_z_end) -> bool {
+    // TODO: Benchmark against integer solution.
+    Point<float> p1 = {static_cast<float>(bin_x_start),
+                       static_cast<float>(bin_y_start),
+                       static_cast<float>(bin_z_start)};
+    Point<float> p2 = {
+        static_cast<float>(bin_x_end), static_cast<float>(bin_y_end),
+        static_cast<float>(bin_z_end),
+        // std::min<float>(hash_width - 1.f, static_cast<float>(bin_x_end)),
+        // std::min<float>(hash_height - 1.f, static_cast<float>(bin_y_end)),
+        // std::min<float>(hash_length - 1.f, static_cast<float>(bin_z_end))
+    };
+    Point<float> current_point = p1;
+    Point<float> distance = {p2.x - p1.x, p2.y - p1.y, p2.z - p1.z};
+    // TODO: This is an inefficient initializer list.
+    float max_component_distance = std::max<float>(
+        {std::abs(distance.x), std::abs(distance.y), std::abs(distance.z)});
+    Point<float> step_size = {distance.x / max_component_distance,
+                              distance.y / max_component_distance,
+                              distance.z / max_component_distance};
+    for (float ii = 0; ii < max_component_distance; ii += 1.f) {
+        current_point = {current_point.x + step_size.x,
+                         current_point.y + step_size.y,
+                         current_point.z + step_size.z};
+        if (current_point.x >= view_width ||
+            current_point.y >= view_height + view_length ||
+            current_point.z >= view_height + view_length) {
+            break;
+        }
+        if (p_aabb_count_in_bin[index_into_view_hash(
+                static_cast<int>(current_point.x),
+                static_cast<int>(current_point.y),
+                static_cast<int>(current_point.z))] > 0) {
             return true;
         }
     }
+
     return false;
 }
 
@@ -225,7 +252,8 @@ void count_entities_in_bins(Entities<entity_count>* p_entities,
                                 this_bin_count] = this_aabb;
 
                     // Increment the count of `AABB`s in this bin, wrapping
-                    // around `sparse_bin_size`. That value is currently `8`.
+                    // around `sparse_bin_size`. That value is currently
+                    // `8`.
                     p_aabb_count_in_bin[index_into_view_hash(bin_x, bin_y,
                                                              bin_z)] =
                         (this_bin_count + 1) & (sparse_bin_size - 1);
@@ -263,9 +291,9 @@ void trace_hash_for_color(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
             Pixel this_color = {.color = {255 / 2, 255 / 2, 255 / 2}};
             int intersected_bin_count = 0;
 
-            // The hash frustrum's data is stored such that increasing the `z`
-            // index finds AABBs with proportionally lower `y` coordinates, so
-            // decrementing `y` by `z` here is unnecessary.
+            // The hash frustrum's data is stored such that increasing the
+            // `z` index finds AABBs with proportionally lower `y`
+            // coordinates, so decrementing `y` by `z` here is unnecessary.
             int bin_x = i / single_bin_area;
 
             int closest_entity_depth = std::numeric_limits<int>::min();
@@ -324,10 +352,12 @@ void trace_hash_for_color(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                                 int this_depth =
                                     this_aabb.position.y -
                                     this_aabb.position.z
-                                    // Position along this `AABB`'s `y` axis:
+                                    // Position along this `AABB`'s `y`
+                                    // axis:
                                     + std::min<int>(
                                           0, this_aabb.extent.y - sprite_px_row)
-                                    // Position along this `AABB`'s `z` axis:
+                                    // Position along this `AABB`'s `z`
+                                    // axis:
                                     - this_sprite.depth[this_sprite_px_index];
 
                                 // Store the pixel with the greatest depth.
@@ -352,8 +382,8 @@ void trace_hash_for_color(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                 }
                 intersected_bin_count += has_intersected;
 
-                // Do not bother tracing this ray further if it has intersected
-                // two adjacent bins already.
+                // Do not bother tracing this ray further if it has
+                // intersected two adjacent bins already.
                 if (intersected_bin_count >= 2) {
                     goto escape_ray;
                 }
@@ -502,7 +532,8 @@ auto main() -> int {
     };
 
     std::vector<Light> lights;
-    lights.push_back({.x = 520, .y = 180, .z = -30});
+    lights.push_back(
+        {.x = view_width, .y = view_height / 5, .z = view_length / 2});
 
     while (true) {
         SDL_Event event;
@@ -568,61 +599,50 @@ auto main() -> int {
             // TODO: This isn't actually the incident vector.
             Vector towards_light =
                 Vector{.x = static_cast<float>(lights[0].x - world_x),
-                       .y = static_cast<float>(lights[0].y - world_y),
+                       .y = -static_cast<float>(lights[0].y - world_y),
                        .z = static_cast<float>(lights[0].z - world_z)}
                     .normalize();
-
-            int dir_x = towards_light.x >= 0.f ? 1 : -1;
-            int dir_y = towards_light.y >= 0.f ? 1 : -1;
-            int dir_z = towards_light.z >= 0.f ? 1 : -1;
 
             Ray this_ray = {
                 .origin = {static_cast<short>(world_x),
                            static_cast<short>(world_y),
                            static_cast<short>(world_z)},
                 .direction_inverse = {
-                    .x = static_cast<short>(1.f / (towards_light.x)),
-                    .y = static_cast<short>(1.f / (towards_light.y)),
-                    .z = static_cast<short>(1.f / (towards_light.z))}};
+                    .x = static_cast<short>(1.f / towards_light.x),
+                    .y = static_cast<short>(1.f / towards_light.y),
+                    .z = static_cast<short>(1.f / towards_light.z)}};
 
             int ray_bin_x = world_x / single_bin_area;
-            int ray_bin_y = world_y / single_bin_area;
+            int ray_bin_y = (view_height - world_y - world_z) / single_bin_area;
             int ray_bin_z = world_z / single_bin_area;
 
-            int light_bin_x = std::max(
-                0, std::min(hash_width, lights[0].x / single_bin_area));
+            int light_bin_x = lights[0].x / single_bin_area;
             int light_bin_y =
-                std::max(0,
-                         std::min(hash_height, lights[0].y / single_bin_area)) -
-                1;
-            int light_bin_z = std::max(
-                0, std::min(hash_length, lights[0].z / single_bin_area));
+                (view_height - lights[0].y - lights[0].z) / single_bin_area;
+            int light_bin_z = lights[0].z / single_bin_area;
 
-            // int light_bin =
-            //     world_to_view_hash_index(lights[0].x, lights[0].y,
-            //     lights[0].z);
-
-            // Set the texture to an ambient color by default.
+            // Set the texture to an ambient brightness by default.
             p_texture[i] = this_pixel.color * ambient_light;
 
             if (trace_hash_for_light(p_aabb_count_in_bin, ray_bin_x, ray_bin_y,
                                      ray_bin_z, light_bin_x, light_bin_y,
                                      light_bin_z)) {
-                goto light_ray_obstructed;
+                continue;
             }
 
-            p_texture[i] =
-                this_pixel.color *
-                // Get the dot product of this pixel's normal and a
-                // light source's incident vector.
-                std::min<float>(1.f,
-                                std::max<float>(ambient_light,
-                                                (normal.x * towards_light.x +
-                                                 normal.y * towards_light.y +
-                                                 normal.z * towards_light.z) *
-                                                    2.f));
-light_ray_obstructed:
-            continue;
+            // Get the dot product between this pixel's normal and the light
+            // ray's incident vector.
+            float diffuse = std::max<float>(0, normal.x * towards_light.x +
+                                                   normal.y * towards_light.y +
+                                                   normal.z * towards_light.z);
+            // Multiply diffuse by distance to the light source.
+            // * (static_cast<float>(std::abs(world_x - lights[0].x) +
+            //                       std::abs(world_y - lights[0].y) +
+            //                       std::abs(world_z - lights[0].z)) /
+            //    200.f);
+
+            p_texture[i] = this_pixel.color *
+                           std::min<float>(1.f, diffuse + ambient_light);
         }
 
         int texture_pitch;
