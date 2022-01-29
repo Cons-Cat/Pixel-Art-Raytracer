@@ -145,7 +145,8 @@ auto world_to_view_hash_index(int x, int y, int z) -> int {
 auto trace_hash_for_light(int* p_aabb_count_in_bin, AABB* p_aabb_bins,
                           int const bin_x_start, int const bin_y_start,
                           int const bin_z_start, int const bin_x_end,
-                          int const bin_y_end, int const bin_z_end) -> bool {
+                          int const bin_y_end, int const bin_z_end, Ray ray)
+    -> bool {
     // TODO: Benchmark against integer solution.
     Point<float> bin_start = {static_cast<float>(bin_x_start),
                               static_cast<float>(bin_y_start),
@@ -168,13 +169,6 @@ auto trace_hash_for_light(int* p_aabb_count_in_bin, AABB* p_aabb_bins,
                                   distance.y / largest_bin_distance,
                                   distance.z / largest_bin_distance};
 
-    Ray ray =
-        Ray{.direction_inverse = {1.f / bin_step_size.x, 1.f / bin_step_size.y,
-                                  1.f / bin_step_size.z},
-            .origin = {static_cast<short>(single_bin_area * bin_start.x),
-                       static_cast<short>(single_bin_area * bin_start.y),
-                       static_cast<short>(single_bin_area * bin_start.z)}};
-
     for (float ii = 0; ii < largest_bin_distance; ii += 1.f) {
         current_point = {current_point.x + bin_step_size.x,
                          current_point.y + bin_step_size.y,
@@ -185,6 +179,16 @@ auto trace_hash_for_light(int* p_aabb_count_in_bin, AABB* p_aabb_bins,
             current_point.z >= view_height + view_length) {
             break;
         }
+
+        int index = index_into_view_hash(static_cast<int>(current_point.x),
+                                         static_cast<int>(current_point.y),
+                                         static_cast<int>(current_point.z));
+
+        // Terminate this ray if it is obstructed here.
+        if (p_aabb_count_in_bin[index] > 0) {
+            if (p_aabb_bins[index].intersect(ray)) {
+                return true;
+            }
         }
     }
 
@@ -625,7 +629,8 @@ auto main() -> int {
 
             if (trace_hash_for_light(p_aabb_count_in_bin, p_aabb_bins,
                                      ray_bin_x, ray_bin_y, ray_bin_z,
-                                     light_bin_x, light_bin_y, light_bin_z)) {
+                                     light_bin_x, light_bin_y, light_bin_z,
+                                     this_ray)) {
                 continue;
             }
 
