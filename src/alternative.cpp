@@ -1,5 +1,3 @@
-#include <liblava/lava.hpp>
-
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_events.h>
 #include <SDL2/SDL_keycode.h>
@@ -25,10 +23,9 @@ struct Point {
 };
 
 struct Ray {
+    Point<float> direction_inverse;
     Point<short> origin;
-    Point<short> direction_inverse;
 };
-static_assert(sizeof(Ray) == 12);
 
 struct alignas(16) AABB {
     // TODO: Factor into min_bound and max_bound, and update velocity with SIMD.
@@ -145,43 +142,49 @@ auto world_to_view_hash_index(int x, int y, int z) -> int {
     return index_into_view_hash(int_x, int_y, int_z);
 }
 
-auto trace_hash_for_light(int* p_aabb_count_in_bin, int const bin_x_start,
-                          int const bin_y_start, int const bin_z_start,
-                          int const bin_x_end, int const bin_y_end,
-                          int const bin_z_end) -> bool {
+auto trace_hash_for_light(int* p_aabb_count_in_bin, AABB* p_aabb_bins,
+                          int const bin_x_start, int const bin_y_start,
+                          int const bin_z_start, int const bin_x_end,
+                          int const bin_y_end, int const bin_z_end) -> bool {
     // TODO: Benchmark against integer solution.
-    Point<float> p1 = {static_cast<float>(bin_x_start),
-                       static_cast<float>(bin_y_start),
-                       static_cast<float>(bin_z_start)};
-    Point<float> p2 = {
-        static_cast<float>(bin_x_end), static_cast<float>(bin_y_end),
+    Point<float> bin_start = {static_cast<float>(bin_x_start),
+                              static_cast<float>(bin_y_start),
+                              static_cast<float>(bin_z_start)};
+    Point<float> bin_end = {
+        static_cast<float>(bin_x_end),
+        static_cast<float>(bin_y_end),
         static_cast<float>(bin_z_end),
-        // std::min<float>(hash_width - 1.f, static_cast<float>(bin_x_end)),
-        // std::min<float>(hash_height - 1.f, static_cast<float>(bin_y_end)),
-        // std::min<float>(hash_length - 1.f, static_cast<float>(bin_z_end))
     };
-    Point<float> current_point = p1;
-    Point<float> distance = {p2.x - p1.x, p2.y - p1.y, p2.z - p1.z};
+
+    Point<float> current_point = bin_start;
+    Point<float> distance = {bin_end.x - bin_start.x, bin_end.y - bin_start.y,
+                             bin_end.z - bin_start.z};
+
     // TODO: This is an inefficient initializer list.
-    float max_component_distance = std::max<float>(
+    float largest_bin_distance = std::max<float>(
         {std::abs(distance.x), std::abs(distance.y), std::abs(distance.z)});
-    Point<float> step_size = {distance.x / max_component_distance,
-                              distance.y / max_component_distance,
-                              distance.z / max_component_distance};
-    for (float ii = 0; ii < max_component_distance; ii += 1.f) {
-        current_point = {current_point.x + step_size.x,
-                         current_point.y + step_size.y,
-                         current_point.z + step_size.z};
+
+    Point<float> bin_step_size = {distance.x / largest_bin_distance,
+                                  distance.y / largest_bin_distance,
+                                  distance.z / largest_bin_distance};
+
+    Ray ray =
+        Ray{.direction_inverse = {1.f / bin_step_size.x, 1.f / bin_step_size.y,
+                                  1.f / bin_step_size.z},
+            .origin = {static_cast<short>(single_bin_area * bin_start.x),
+                       static_cast<short>(single_bin_area * bin_start.y),
+                       static_cast<short>(single_bin_area * bin_start.z)}};
+
+    for (float ii = 0; ii < largest_bin_distance; ii += 1.f) {
+        current_point = {current_point.x + bin_step_size.x,
+                         current_point.y + bin_step_size.y,
+                         current_point.z + bin_step_size.z};
+        // Do not trace outside of the view.
         if (current_point.x >= view_width ||
             current_point.y >= view_height + view_length ||
             current_point.z >= view_height + view_length) {
             break;
         }
-        if (p_aabb_count_in_bin[index_into_view_hash(
-                static_cast<int>(current_point.x),
-                static_cast<int>(current_point.y),
-                static_cast<int>(current_point.z))] > 0) {
-            return true;
         }
     }
 
@@ -274,20 +277,17 @@ void trace_hash_for_color(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
         // `j` is a ray's `y` world-position, iterating upwards.
         for (short j = 0; j < view_height; j++) {
             short world_j = static_cast<short>(view_height - j);
-            Ray this_ray = {
-                .origin =
-                    {
-                        .x = i,
-                        .y = world_j,
-                        .z = 0,
-                    },
-                .direction_inverse =
-                    {
-                        .x = 0,
-                        .y = -1,  // 1 / -1
-                        .z = 1,   // 1 / 1
-                    },
-            };
+            Ray this_ray = {.direction_inverse =
+                                {
+                                    .x = 0,
+                                    .y = -1,  // 1 / -1
+                                    .z = 1,   // 1 / 1
+                                },
+                            .origin = {
+                                .x = i,
+                                .y = world_j,
+                                .z = 0,
+                            }};
 
             Pixel this_color = {.color = {255 / 2, 255 / 2, 255 / 2}};
             int intersected_bin_count = 0;
@@ -604,14 +604,12 @@ auto main() -> int {
                        .z = static_cast<float>(lights[0].z - world_z)}
                     .normalize();
 
-            Ray this_ray = {
-                .origin = {static_cast<short>(world_x),
-                           static_cast<short>(world_y),
-                           static_cast<short>(world_z)},
-                .direction_inverse = {
-                    .x = static_cast<short>(1.f / towards_light.x),
-                    .y = static_cast<short>(1.f / towards_light.y),
-                    .z = static_cast<short>(1.f / towards_light.z)}};
+            Ray this_ray = {.direction_inverse = {.x = 1.f / towards_light.x,
+                                                  .y = 1.f / towards_light.y,
+                                                  .z = 1.f / towards_light.z},
+                            .origin = {static_cast<short>(world_x),
+                                       static_cast<short>(world_y),
+                                       static_cast<short>(world_z)}};
 
             int ray_bin_x = world_x / single_bin_area;
             int ray_bin_y = (view_height - world_y - world_z) / single_bin_area;
@@ -625,9 +623,9 @@ auto main() -> int {
             // Set the texture to an ambient brightness by default.
             p_texture[i] = this_pixel.color * ambient_light;
 
-            if (trace_hash_for_light(p_aabb_count_in_bin, ray_bin_x, ray_bin_y,
-                                     ray_bin_z, light_bin_x, light_bin_y,
-                                     light_bin_z)) {
+            if (trace_hash_for_light(p_aabb_count_in_bin, p_aabb_bins,
+                                     ray_bin_x, ray_bin_y, ray_bin_z,
+                                     light_bin_x, light_bin_y, light_bin_z)) {
                 continue;
             }
 
