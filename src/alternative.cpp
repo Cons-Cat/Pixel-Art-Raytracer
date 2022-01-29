@@ -32,48 +32,72 @@ struct alignas(16) AABB {
     Point<short> position;
     Point<short> extent;
 
-    auto intersect(Ray& ray) -> bool {
-        // Adapted from Fast, Branchless Ray/Bounding Box Intersections:
-        // https://tavianator.com/2011/ray_box.html X plane comparisons.
+    auto intersect_downward(Ray& ray) -> bool {
         short min_distance = std::numeric_limits<short>::min();
         short max_distance = std::numeric_limits<short>::max();
 
-        // X plane comparisons.
-        if (ray.direction_inverse.x != 0) {
-            short intersect_x_1 = static_cast<short>(
-                (position.x - ray.origin.x) * ray.direction_inverse.x);
-            short intersect_x_2 =
-                static_cast<short>((position.x + extent.x - ray.origin.x) *
-                                   ray.direction_inverse.x);
-            min_distance = std::min(intersect_x_1, intersect_x_2);
-            max_distance = std::max(intersect_x_1, intersect_x_2);
-        }
-
         // Y plane comparisons.
-        if (ray.direction_inverse.y != 0) {
-            short intersect_y_1 = static_cast<short>(
-                (position.y - ray.origin.y) * ray.direction_inverse.y);
-            short intersect_y_2 =
-                static_cast<short>((position.y + extent.y - ray.origin.y) *
-                                   ray.direction_inverse.y);
-            min_distance =
-                std::max(min_distance, std::min(intersect_y_1, intersect_y_2));
-            max_distance =
-                std::min(max_distance, std::max(intersect_y_1, intersect_y_2));
-        }
+        short intersect_y_1 = static_cast<short>((position.y - ray.origin.y) *
+                                                 ray.direction_inverse.y);
+        short intersect_y_2 = static_cast<short>(
+            (position.y + extent.y - ray.origin.y) * ray.direction_inverse.y);
+        min_distance =
+            std::max(min_distance, std::min(intersect_y_1, intersect_y_2));
+        max_distance =
+            std::min(max_distance, std::max(intersect_y_1, intersect_y_2));
 
         // Z plane comparisons.
-        if (ray.direction_inverse.z != 0) {
-            short intersect_z_1 = static_cast<short>(
-                (position.z - ray.origin.z) * ray.direction_inverse.z);
-            short intersect_z_2 =
-                static_cast<short>((position.z + extent.z - ray.origin.z) *
-                                   ray.direction_inverse.z);
-            min_distance =
-                std::max(min_distance, std::min(intersect_z_1, intersect_z_2));
-            max_distance =
-                std::min(max_distance, std::max(intersect_z_1, intersect_z_2));
-        }
+        short intersect_z_1 = static_cast<short>((position.z - ray.origin.z) *
+                                                 ray.direction_inverse.z);
+        short intersect_z_2 = static_cast<short>(
+            (position.z + extent.z - ray.origin.z) * ray.direction_inverse.z);
+        min_distance =
+            std::max(min_distance, std::min(intersect_z_1, intersect_z_2));
+        max_distance =
+            std::min(max_distance, std::max(intersect_z_1, intersect_z_2));
+
+        return max_distance >= min_distance;
+    }
+
+    auto intersect_precise(Ray& ray) -> bool {
+        // Adapted from Fast, Branchless Ray/Bounding Box Intersections:
+        // https://tavianator.com/2011/ray_box.html X plane comparisons.
+        float min_distance;
+        float max_distance;
+
+        // X plane comparisons.
+        float intersect_x_1 = static_cast<float>(position.x - ray.origin.x) *
+                              ray.direction_inverse.x;
+        float intersect_x_2 =
+            static_cast<float>(position.x + extent.x - ray.origin.x) *
+            ray.direction_inverse.x;
+
+        min_distance = std::min(intersect_x_1, intersect_x_2);
+        max_distance = std::max(intersect_x_1, intersect_x_2);
+
+        // Y plane comparisons.
+        float intersect_y_1 = static_cast<float>(position.y - ray.origin.y) *
+                              ray.direction_inverse.y;
+        float intersect_y_2 =
+            static_cast<float>(position.y + extent.y - ray.origin.y) *
+            ray.direction_inverse.y;
+
+        min_distance = std::max<float>(min_distance,
+                                       std::min(intersect_y_1, intersect_y_2));
+        max_distance = std::min<float>(max_distance,
+                                       std::max(intersect_y_1, intersect_y_2));
+
+        // Z plane comparisons.
+        float intersect_z_1 = static_cast<float>(position.z - ray.origin.z) *
+                              ray.direction_inverse.z;
+        float intersect_z_2 =
+            static_cast<float>(position.z + extent.z - ray.origin.z) *
+            ray.direction_inverse.z;
+
+        min_distance =
+            std::max(min_distance, std::min(intersect_z_1, intersect_z_2));
+        max_distance =
+            std::min(max_distance, std::max(intersect_z_1, intersect_z_2));
 
         return max_distance >= min_distance;
     }
@@ -168,6 +192,7 @@ auto trace_hash_for_light(int* p_aabb_count_in_bin, AABB* p_aabb_bins,
     Point<float> bin_step_size = {distance.x / largest_bin_distance,
                                   distance.y / largest_bin_distance,
                                   distance.z / largest_bin_distance};
+    ray.direction_inverse.y *= -1;
 
     for (float ii = 0; ii < largest_bin_distance; ii += 1.f) {
         current_point = {current_point.x + bin_step_size.x,
@@ -186,7 +211,7 @@ auto trace_hash_for_light(int* p_aabb_count_in_bin, AABB* p_aabb_bins,
 
         // Terminate this ray if it is obstructed here.
         if (p_aabb_count_in_bin[index] > 0) {
-            if (p_aabb_bins[index].intersect(ray)) {
+            if (p_aabb_bins[index].intersect_precise(ray)) {
                 return true;
             }
         }
@@ -331,7 +356,7 @@ void trace_hash_for_color(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                             world_j <=
                                 this_aabb.position.y + this_aabb.extent.y +
                                     this_aabb.position.z + this_aabb.extent.z) {
-                            if (this_aabb.intersect(this_ray)) {
+                            if (this_aabb.intersect_downward(this_ray)) {
                                 int this_entity_index =
                                     p_aabb_index_to_entity_index_map
                                         [index_into_view_hash(bin_x, bin_y,
