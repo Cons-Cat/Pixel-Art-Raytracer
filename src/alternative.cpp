@@ -169,7 +169,7 @@ auto world_to_view_hash_index(int x, int y, int z) -> int {
 auto trace_hash_for_light(int* p_aabb_count_in_bin, AABB* p_aabb_bins,
                           int const bin_x_start, int const bin_y_start,
                           int const bin_z_start, int const bin_x_end,
-                          int const bin_y_end, int const bin_z_end, Ray ray)
+                          int const bin_y_end, int const bin_z_end, Ray& ray)
     -> bool {
     // TODO: Benchmark against integer solution.
     Point<float> bin_start = {static_cast<float>(bin_x_start),
@@ -181,7 +181,7 @@ auto trace_hash_for_light(int* p_aabb_count_in_bin, AABB* p_aabb_bins,
         static_cast<float>(bin_z_end),
     };
 
-    Point<float> current_point = bin_start;
+    Point<float> current_bin_point = bin_start;
     Point<float> distance = {bin_end.x - bin_start.x, bin_end.y - bin_start.y,
                              bin_end.z - bin_start.z};
 
@@ -192,28 +192,22 @@ auto trace_hash_for_light(int* p_aabb_count_in_bin, AABB* p_aabb_bins,
     Point<float> bin_step_size = {distance.x / largest_bin_distance,
                                   distance.y / largest_bin_distance,
                                   distance.z / largest_bin_distance};
-    ray.direction_inverse.y *= -1;
 
     for (float ii = 0; ii < largest_bin_distance; ii += 1.f) {
-        current_point = {current_point.x + bin_step_size.x,
-                         current_point.y + bin_step_size.y,
-                         current_point.z + bin_step_size.z};
-        // Do not trace outside of the view.
-        if (current_point.x >= view_width ||
-            current_point.y >= view_height + view_length ||
-            current_point.z >= view_height + view_length) {
-            break;
-        }
+        current_bin_point = {current_bin_point.x + bin_step_size.x,
+                             current_bin_point.y + bin_step_size.y,
+                             current_bin_point.z + bin_step_size.z};
+        // TODO: Do not trace outside of the view.
 
-        int index = index_into_view_hash(static_cast<int>(current_point.x),
-                                         static_cast<int>(current_point.y),
-                                         static_cast<int>(current_point.z));
+        int index = index_into_view_hash(static_cast<int>(current_bin_point.x),
+                                         static_cast<int>(current_bin_point.y),
+                                         static_cast<int>(current_bin_point.z));
 
         // Terminate this ray if it is obstructed here.
         if (p_aabb_count_in_bin[index] > 0) {
-            if (p_aabb_bins[index].intersect_precise(ray)) {
-                return true;
-            }
+            // if (p_aabb_bins[index].intersect_precise(ray)) {
+            return true;
+            // }
         }
     }
 
@@ -306,17 +300,15 @@ void trace_hash_for_color(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
         // `j` is a ray's `y` world-position, iterating upwards.
         for (short j = 0; j < view_height; j++) {
             short world_j = static_cast<short>(view_height - j);
-            Ray this_ray = {.direction_inverse =
-                                {
-                                    .x = 0,
-                                    .y = -1,  // 1 / -1
-                                    .z = 1,   // 1 / 1
-                                },
-                            .origin = {
-                                .x = i,
-                                .y = world_j,
-                                .z = 0,
-                            }};
+            Ray this_ray = {
+                .direction_inverse =
+                    {
+                        .x = 0,
+                        .y = -1,  // 1 / -1
+                        .z = 1,   // 1 / 1
+                    },
+                .origin = {.x = i, .y = world_j, .z = 0},
+            };
 
             Pixel this_color = {.color = {255 / 2, 255 / 2, 255 / 2}};
             int intersected_bin_count = 0;
@@ -398,10 +390,15 @@ void trace_hash_for_color(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
 
                                 this_color.color = color_palette
                                     [this_sprite.color[this_sprite_px_index]];
-                                this_color.y = world_j;
+
+                                // this_color.y = world_j;
+                                this_color.y = this_aabb.position.y +
+                                               this_aabb.extent.y -
+                                               sprite_px_row;
                                 this_color.z =
                                     this_aabb.position.z +
                                     this_sprite.depth[this_sprite_px_index];
+
                                 this_color.normal =
                                     this_sprite.normal[this_sprite_px_index];
 
@@ -629,7 +626,7 @@ auto main() -> int {
             // TODO: This isn't actually the incident vector.
             Vector towards_light =
                 Vector{.x = static_cast<float>(lights[0].x - world_x),
-                       .y = -static_cast<float>(lights[0].y - world_y),
+                       .y = static_cast<float>(lights[0].y - world_y),
                        .z = static_cast<float>(lights[0].z - world_z)}
                     .normalize();
 
@@ -652,6 +649,7 @@ auto main() -> int {
             // Set the texture to an ambient brightness by default.
             p_texture[i] = this_pixel.color * ambient_light;
 
+            // Leave the color as ambience if the light is obstructed.
             if (trace_hash_for_light(p_aabb_count_in_bin, p_aabb_bins,
                                      ray_bin_x, ray_bin_y, ray_bin_z,
                                      light_bin_x, light_bin_y, light_bin_z,
