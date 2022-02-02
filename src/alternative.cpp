@@ -313,68 +313,64 @@ void trace_hash_for_color(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                                         sparse_bin_size +
                                     this_bin_entity_index];
 
-                    // Intersect ray with this aabb.
+                    // Intersect ray with this aabb. Because we know that the
+                    // ray's slope is <0, -1, 1>, a rigorous intersection test
+                    // is unnecessary.
                     if (i >= this_aabb.position.x &&
-                        i < this_aabb.position.x + this_aabb.extent.x) {
-                        if (world_j >
-                                this_aabb.position.y + this_aabb.position.z &&
-                            world_j <=
-                                this_aabb.position.y + this_aabb.extent.y +
-                                    this_aabb.position.z + this_aabb.extent.z) {
-                            int this_entity_index =
-                                p_aabb_index_to_entity_index_map
-                                    [index_into_view_hash(bin_x, bin_y, bin_z) *
-                                         sparse_bin_size +
-                                     this_bin_entity_index];
+                        i < this_aabb.position.x + this_aabb.extent.x &&
+                        world_j > this_aabb.position.y + this_aabb.position.z &&
+                        world_j <= this_aabb.position.y + this_aabb.extent.y +
+                                       this_aabb.position.z +
+                                       this_aabb.extent.z) {
+                        int this_entity_index = p_aabb_index_to_entity_index_map
+                            [index_into_view_hash(bin_x, bin_y, bin_z) *
+                                 sparse_bin_size +
+                             this_bin_entity_index];
 
-                            Sprite& this_sprite =
-                                p_entities->sprites[this_bin_entity_index];
+                        Sprite& this_sprite =
+                            p_entities->sprites[this_bin_entity_index];
 
-                            int sprite_px_row = this_aabb.position.y +
-                                                this_aabb.extent.y +
-                                                this_aabb.position.z +
-                                                this_aabb.extent.z - world_j;
+                        int sprite_px_row =
+                            this_aabb.position.y + this_aabb.extent.y +
+                            this_aabb.position.z + this_aabb.extent.z - world_j;
 
-                            int this_sprite_px_index =
-                                sprite_px_row * 20 +
-                                // Sprite pixel's column:
-                                (i - this_aabb.position.x);
+                        int this_sprite_px_index = sprite_px_row * 20 +
+                                                   // Sprite pixel's column:
+                                                   (i - this_aabb.position.x);
 
-                            // Depth increases as `y` increases, and it
-                            // decreases as `z` increases.
-                            int this_depth =
-                                this_aabb.position.y -
-                                this_aabb.position.z
-                                // Position along this `AABB`'s `y`
-                                // axis:
-                                + std::min<int>(
-                                      0, this_aabb.extent.y - sprite_px_row)
-                                // Position along this `AABB`'s `z`
-                                // axis:
-                                - this_sprite.depth[this_sprite_px_index];
+                        // Depth increases as `y` increases, and it
+                        // decreases as `z` increases.
+                        int this_depth =
+                            this_aabb.position.y -
+                            this_aabb.position.z
+                            // Position along this `AABB`'s `y`
+                            // axis:
+                            +
+                            std::min<int>(0, this_aabb.extent.y - sprite_px_row)
+                            // Position along this `AABB`'s `z`
+                            // axis:
+                            - this_sprite.depth[this_sprite_px_index];
 
-                            // Store the pixel with the greatest depth.
-                            if (closest_entity_depth >= this_depth) {
-                                continue;
-                            }
-                            closest_entity_depth = this_depth;
-
-                            this_color.color =
-                                color_palette[this_sprite
-                                                  .color[this_sprite_px_index]];
-
-                            // this_color.y = world_j;
-                            this_color.y = this_aabb.position.y +
-                                           this_aabb.extent.y - sprite_px_row;
-                            this_color.z =
-                                this_aabb.position.z +
-                                this_sprite.depth[this_sprite_px_index];
-
-                            this_color.normal =
-                                this_sprite.normal[this_sprite_px_index];
-
-                            has_intersected = true;
+                        // Store the pixel with the greatest depth.
+                        if (closest_entity_depth >= this_depth) {
+                            continue;
                         }
+                        closest_entity_depth = this_depth;
+
+                        this_color.color =
+                            color_palette[this_sprite
+                                              .color[this_sprite_px_index]];
+
+                        // this_color.y = world_j;
+                        this_color.y = this_aabb.position.y +
+                                       this_aabb.extent.y - sprite_px_row;
+                        this_color.z = this_aabb.position.z +
+                                       this_sprite.depth[this_sprite_px_index];
+
+                        this_color.normal =
+                            this_sprite.normal[this_sprite_px_index];
+
+                        has_intersected = true;
                     }
                 }
                 intersected_bin_count += has_intersected;
