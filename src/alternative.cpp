@@ -32,34 +32,7 @@ struct alignas(16) AABB {
     Point<short> position;
     Point<short> extent;
 
-    auto intersect_downward(Ray& ray) -> bool {
-        short min_distance = std::numeric_limits<short>::min();
-        short max_distance = std::numeric_limits<short>::max();
-
-        // Y plane comparisons.
-        short intersect_y_1 = static_cast<short>((position.y - ray.origin.y) *
-                                                 ray.direction_inverse.y);
-        short intersect_y_2 = static_cast<short>(
-            (position.y + extent.y - ray.origin.y) * ray.direction_inverse.y);
-        min_distance =
-            std::max(min_distance, std::min(intersect_y_1, intersect_y_2));
-        max_distance =
-            std::min(max_distance, std::max(intersect_y_1, intersect_y_2));
-
-        // Z plane comparisons.
-        short intersect_z_1 = static_cast<short>((position.z - ray.origin.z) *
-                                                 ray.direction_inverse.z);
-        short intersect_z_2 = static_cast<short>(
-            (position.z + extent.z - ray.origin.z) * ray.direction_inverse.z);
-        min_distance =
-            std::max(min_distance, std::min(intersect_z_1, intersect_z_2));
-        max_distance =
-            std::min(max_distance, std::max(intersect_z_1, intersect_z_2));
-
-        return max_distance >= min_distance;
-    }
-
-    auto intersect_precise(Ray& ray) -> bool {
+    auto intersect(Ray& ray) -> bool {
         // Adapted from Fast, Branchless Ray/Bounding Box Intersections:
         // https://tavianator.com/2011/ray_box.html X plane comparisons.
         float min_distance;
@@ -348,62 +321,59 @@ void trace_hash_for_color(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                             world_j <=
                                 this_aabb.position.y + this_aabb.extent.y +
                                     this_aabb.position.z + this_aabb.extent.z) {
-                            if (this_aabb.intersect_downward(this_ray)) {
-                                int this_entity_index =
-                                    p_aabb_index_to_entity_index_map
-                                        [index_into_view_hash(bin_x, bin_y,
-                                                              bin_z) *
-                                             sparse_bin_size +
-                                         this_bin_entity_index];
+                            int this_entity_index =
+                                p_aabb_index_to_entity_index_map
+                                    [index_into_view_hash(bin_x, bin_y, bin_z) *
+                                         sparse_bin_size +
+                                     this_bin_entity_index];
 
-                                Sprite& this_sprite =
-                                    p_entities->sprites[this_bin_entity_index];
+                            Sprite& this_sprite =
+                                p_entities->sprites[this_bin_entity_index];
 
-                                int sprite_px_row =
-                                    this_aabb.position.y + this_aabb.extent.y +
-                                    this_aabb.position.z + this_aabb.extent.z -
-                                    world_j;
+                            int sprite_px_row = this_aabb.position.y +
+                                                this_aabb.extent.y +
+                                                this_aabb.position.z +
+                                                this_aabb.extent.z - world_j;
 
-                                int this_sprite_px_index =
-                                    sprite_px_row * 20 +
-                                    // Sprite pixel's column:
-                                    (i - this_aabb.position.x);
+                            int this_sprite_px_index =
+                                sprite_px_row * 20 +
+                                // Sprite pixel's column:
+                                (i - this_aabb.position.x);
 
-                                // Depth increases as `y` increases, and it
-                                // decreases as `z` increases.
-                                int this_depth =
-                                    this_aabb.position.y -
-                                    this_aabb.position.z
-                                    // Position along this `AABB`'s `y`
-                                    // axis:
-                                    + std::min<int>(
-                                          0, this_aabb.extent.y - sprite_px_row)
-                                    // Position along this `AABB`'s `z`
-                                    // axis:
-                                    - this_sprite.depth[this_sprite_px_index];
+                            // Depth increases as `y` increases, and it
+                            // decreases as `z` increases.
+                            int this_depth =
+                                this_aabb.position.y -
+                                this_aabb.position.z
+                                // Position along this `AABB`'s `y`
+                                // axis:
+                                + std::min<int>(
+                                      0, this_aabb.extent.y - sprite_px_row)
+                                // Position along this `AABB`'s `z`
+                                // axis:
+                                - this_sprite.depth[this_sprite_px_index];
 
-                                // Store the pixel with the greatest depth.
-                                if (closest_entity_depth >= this_depth) {
-                                    continue;
-                                }
-                                closest_entity_depth = this_depth;
-
-                                this_color.color = color_palette
-                                    [this_sprite.color[this_sprite_px_index]];
-
-                                // this_color.y = world_j;
-                                this_color.y = this_aabb.position.y +
-                                               this_aabb.extent.y -
-                                               sprite_px_row;
-                                this_color.z =
-                                    this_aabb.position.z +
-                                    this_sprite.depth[this_sprite_px_index];
-
-                                this_color.normal =
-                                    this_sprite.normal[this_sprite_px_index];
-
-                                has_intersected = true;
+                            // Store the pixel with the greatest depth.
+                            if (closest_entity_depth >= this_depth) {
+                                continue;
                             }
+                            closest_entity_depth = this_depth;
+
+                            this_color.color =
+                                color_palette[this_sprite
+                                                  .color[this_sprite_px_index]];
+
+                            // this_color.y = world_j;
+                            this_color.y = this_aabb.position.y +
+                                           this_aabb.extent.y - sprite_px_row;
+                            this_color.z =
+                                this_aabb.position.z +
+                                this_sprite.depth[this_sprite_px_index];
+
+                            this_color.normal =
+                                this_sprite.normal[this_sprite_px_index];
+
+                            has_intersected = true;
                         }
                     }
                 }
@@ -560,7 +530,7 @@ auto main() -> int {
 
     std::vector<Light> lights;
     lights.push_back(
-        {.x = view_width, .y = view_height / 5, .z = view_length / 2});
+        {.x = view_width, .y = view_height / 4, .z = view_length / 2});
 
     while (true) {
         SDL_Event event;
