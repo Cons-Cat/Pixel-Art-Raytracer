@@ -235,9 +235,9 @@ void count_entities_in_bins(Entities<entity_count>* p_entities,
             std::min(hash_length, (this_max_z_world + 19) / single_bin_area);
 
         // Place this AABB into every bin that it spans across.
-        for (int bin_x = min_x_index; bin_x <= max_x_index; bin_x += 1) {
-            for (int bin_y = min_y_index; bin_y < max_y_index; bin_y += 1) {
-                for (int bin_z = min_z_index; bin_z < max_z_index; bin_z += 1) {
+        for (int bin_x = min_x_index; bin_x <= max_x_index; bin_x++) {
+            for (int bin_y = min_y_index; bin_y < max_y_index; bin_y++) {
+                for (int bin_z = min_z_index; bin_z < max_z_index; bin_z++) {
                     int this_bin_count =
                         p_aabb_count_in_bin[index_into_view_hash(bin_x, bin_y,
                                                                  bin_z)];
@@ -307,13 +307,13 @@ void trace_hash_for_color(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
 
                 for (int this_bin_entity_index = 0;
                      this_bin_entity_index < entities_in_this_bin;
-                     this_bin_entity_index += 1) {
+                     this_bin_entity_index++) {
                     AABB& this_aabb =
                         p_aabb_bins[index_into_view_hash(bin_x, bin_y, bin_z) *
                                         sparse_bin_size +
                                     this_bin_entity_index];
 
-                    // Intersect ray with this aabb. Because we know that the
+                    // Intersect ray with this `AABB`. Because we know that the
                     // ray's slope is <0, -1, 1>, a rigorous intersection test
                     // is unnecessary.
                     if (i >= this_aabb.position.x &&
@@ -390,13 +390,13 @@ escape_ray:
     }
 
     // Draw hash grid.
-    for (int i = 0; i < view_width; i += 1) {
+    for (int i = 0; i < view_width; i++) {
         for (int j = 0; j < view_height; j += single_bin_area) {
             p_texture[j * view_width + i] = {0, 0, 0};
         }
     }
     for (int i = 0; i < view_width; i += single_bin_area) {
-        for (int j = 0; j < view_height; j += 1) {
+        for (int j = 0; j < view_height; j++) {
             p_texture[j * view_width + i] = {0, 0, 0};
         }
     }
