@@ -20,6 +20,19 @@
 template <typename T>
 struct Point {
     T x, y, z;
+
+    auto operator==(Point<T> point) -> bool {
+        return point.x == this->x && point.y == this->y && point.z == this->z;
+    }
+
+    template <typename U>
+    explicit operator Point<U>() const {
+        return {
+            .x = static_cast<U>(this->x),
+            .y = static_cast<U>(this->y),
+            .z = static_cast<U>(this->z),
+        };
+    }
 };
 
 struct Ray {
@@ -34,7 +47,9 @@ struct alignas(16) AABB {
 
     auto intersect(Ray& ray) -> bool {
         // Adapted from Fast, Branchless Ray/Bounding Box Intersections:
-        // https://tavianator.com/2011/ray_box.html X plane comparisons.
+        // https://tavianator.com/2011/ray_box.html
+        //
+        // ... with adjustments to better suit our use-case.
         float min_distance;
         float max_distance;
 
@@ -170,17 +185,17 @@ auto trace_hash_for_light(int* p_aabb_count_in_bin, AABB* p_aabb_bins,
         current_bin_point = {current_bin_point.x + bin_step_size.x,
                              current_bin_point.y + bin_step_size.y,
                              current_bin_point.z + bin_step_size.z};
+        Point<int> current_bin_int = static_cast<Point<int>>(current_bin_point);
+
         // TODO: Do not trace outside of the view.
 
-        int index = index_into_view_hash(static_cast<int>(current_bin_point.x),
-                                         static_cast<int>(current_bin_point.y),
-                                         static_cast<int>(current_bin_point.z));
-
-        // Terminate this ray if it is obstructed here.
+        int index = index_into_view_hash(current_bin_int.x, current_bin_int.y,
+                                         current_bin_int.z);
+        // Terminate this ray if it is obstructed in this bin.
         if (p_aabb_count_in_bin[index] > 0) {
-            // if (p_aabb_bins[index].intersect_precise(ray)) {
-            return true;
-            // }
+            if (p_aabb_bins[index].intersect(ray)) {
+                return true;
+            }
         }
     }
 
@@ -526,7 +541,7 @@ auto main() -> int {
 
     std::vector<Light> lights;
     lights.push_back(
-        {.x = view_width, .y = view_height / 4, .z = view_length / 2});
+        {.x = view_width, .y = view_height - 20, .z = view_length / 2});
 
     while (true) {
         SDL_Event event;
