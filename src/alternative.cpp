@@ -169,33 +169,35 @@ auto trace_hash_for_light(int* p_aabb_count_in_bin, AABB* p_aabb_bins,
         static_cast<float>(bin_z_end),
     };
 
-    Point<float> current_bin_point = bin_start;
-    Point<float> distance = {bin_end.x - bin_start.x, bin_end.y - bin_start.y,
-                             bin_end.z - bin_start.z};
+    Point<float> current_bin_float = bin_start;
+    Point<float> bin_distance = {bin_end.x - bin_start.x,
+                                 bin_end.y - bin_start.y,
+                                 bin_end.z - bin_start.z};
 
     // TODO: This is an inefficient initializer list.
-    float largest_bin_distance = std::max<float>(
-        {std::abs(distance.x), std::abs(distance.y), std::abs(distance.z)});
+    float largest_bin_distance =
+        std::max<float>({std::abs(bin_distance.x), std::abs(bin_distance.y),
+                         std::abs(bin_distance.z)});
 
-    Point<float> bin_step_size = {distance.x / largest_bin_distance,
-                                  distance.y / largest_bin_distance,
-                                  distance.z / largest_bin_distance};
+    Point<float> bin_step_size = {bin_distance.x / largest_bin_distance,
+                                  bin_distance.y / largest_bin_distance,
+                                  bin_distance.z / largest_bin_distance};
 
     for (float ii = 0; ii < largest_bin_distance; ii += 1.f) {
-        current_bin_point = {current_bin_point.x + bin_step_size.x,
-                             current_bin_point.y + bin_step_size.y,
-                             current_bin_point.z + bin_step_size.z};
-        Point<int> current_bin_int = static_cast<Point<int>>(current_bin_point);
+        current_bin_float = {current_bin_float.x + bin_step_size.x,
+                             current_bin_float.y + bin_step_size.y,
+                             current_bin_float.z + bin_step_size.z};
+        Point<int> current_bin = static_cast<Point<int>>(current_bin_float);
 
         // TODO: Do not trace outside of the view.
 
-        int index = index_into_view_hash(current_bin_int.x, current_bin_int.y,
-                                         current_bin_int.z);
+        int index =
+            index_into_view_hash(current_bin.x, current_bin.y, current_bin.z);
         // Terminate this ray if it is obstructed in this bin.
         if (p_aabb_count_in_bin[index] > 0) {
-            if (p_aabb_bins[index].intersect(ray)) {
-                return false;
-            }
+            // if (p_aabb_bins[index].intersect(ray)) {
+            return false;
+            // }
         }
     }
 
@@ -541,7 +543,7 @@ auto main() -> int {
 
     std::vector<Light> lights;
     lights.push_back(
-        {.x = view_width, .y = view_height - 20, .z = view_length / 2});
+        {.x = view_width, .y = view_height / 2, .z = view_length / 4});
 
     while (true) {
         SDL_Event event;
