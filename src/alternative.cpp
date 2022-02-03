@@ -194,12 +194,12 @@ auto trace_hash_for_light(int* p_aabb_count_in_bin, AABB* p_aabb_bins,
         // Terminate this ray if it is obstructed in this bin.
         if (p_aabb_count_in_bin[index] > 0) {
             if (p_aabb_bins[index].intersect(ray)) {
-                return true;
+                return false;
             }
         }
     }
 
-    return false;
+    return true;
 }
 
 // TODO total aabb count.
@@ -635,22 +635,20 @@ auto main() -> int {
                                      ray_bin_x, ray_bin_y, ray_bin_z,
                                      light_bin_x, light_bin_y, light_bin_z,
                                      this_ray)) {
-                continue;
+                // Get the dot product between this pixel's normal and the light
+                // ray's incident vector.
+                float diffuse = std::max<float>(
+                    0, normal.x * towards_light.x + normal.y * towards_light.y +
+                           normal.z * towards_light.z);
+                // Multiply diffuse by distance to the light source.
+                // * (static_cast<float>(std::abs(world_x - lights[0].x) +
+                //                       std::abs(world_y - lights[0].y) +
+                //                       std::abs(world_z - lights[0].z)) /
+                //    200.f);
+
+                p_texture[i] = this_pixel.color *
+                               std::min<float>(1.f, diffuse + ambient_light);
             }
-
-            // Get the dot product between this pixel's normal and the light
-            // ray's incident vector.
-            float diffuse = std::max<float>(0, normal.x * towards_light.x +
-                                                   normal.y * towards_light.y +
-                                                   normal.z * towards_light.z);
-            // Multiply diffuse by distance to the light source.
-            // * (static_cast<float>(std::abs(world_x - lights[0].x) +
-            //                       std::abs(world_y - lights[0].y) +
-            //                       std::abs(world_z - lights[0].z)) /
-            //    200.f);
-
-            p_texture[i] = this_pixel.color *
-                           std::min<float>(1.f, diffuse + ambient_light);
         }
 
         int texture_pitch;
