@@ -395,11 +395,10 @@ void trace_hash_for_color(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                 // Do not bother tracing this ray further if it has
                 // intersected two adjacent bins already.
                 if (intersected_bin_count >= 2) {
-                    goto escape_ray;
+                    break;
                 }
             }
 
-escape_ray:
             // `j` decreases as the cursor moves downwards.
             // `i` increases as the cursor moves rightwards.
             p_texture[j * view_width + i] = this_color;
