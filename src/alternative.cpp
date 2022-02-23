@@ -283,7 +283,7 @@ void count_entities_in_bins(Entities<entity_count>* p_entities,
     }
 };
 
-void trace_hash_for_color(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
+void trace_hash_for_pixel(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                           int* p_aabb_count_in_bin,
                           int* p_aabb_index_to_entity_index_map,
                           Pixel* p_texture) {
@@ -596,7 +596,7 @@ auto main() -> int {
                hash_volume * sizeof(decltype(*p_aabb_count_in_bin)));
         count_entities_in_bins(p_entities, p_aabb_bins, p_aabb_count_in_bin,
                                p_aabb_index_to_entity_index_map);
-        trace_hash_for_color(p_entities, p_aabb_bins, p_aabb_count_in_bin,
+        trace_hash_for_pixel(p_entities, p_aabb_bins, p_aabb_count_in_bin,
                              p_aabb_index_to_entity_index_map, p_pixel_buffer);
 
         float ambient_light = 0.25f;
