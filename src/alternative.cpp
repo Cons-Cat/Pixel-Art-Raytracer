@@ -195,9 +195,9 @@ auto trace_hash_for_light(int* p_aabb_count_in_bin, AABB* p_aabb_bins,
             index_into_view_hash(current_bin.x, current_bin.y, current_bin.z);
         // Terminate this ray if it is obstructed in this bin.
         if (p_aabb_count_in_bin[index] > 0) {
-            // if (p_aabb_bins[index].intersect(ray)) {
-            return false;
-            // }
+            if (p_aabb_bins[index].intersect(ray)) {
+                return false;
+            }
         }
     }
 
@@ -605,7 +605,6 @@ auto main() -> int {
             int world_y = this_pixel.y;
             int world_z = this_pixel.z;
 
-            // TODO: This isn't actually the incident vector.
             Vector towards_light =
                 Vector{.x = static_cast<float>(lights[0].x - world_x),
                        .y = static_cast<float>(lights[0].y - world_y),
