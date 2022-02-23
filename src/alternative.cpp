@@ -163,11 +163,10 @@ auto trace_hash_for_light(int* p_aabb_count_in_bin, AABB* p_aabb_bins,
     Point<float> bin_start = {static_cast<float>(bin_x_start),
                               static_cast<float>(bin_y_start),
                               static_cast<float>(bin_z_start)};
-    Point<float> bin_end = {
-        static_cast<float>(bin_x_end),
-        static_cast<float>(bin_y_end),
-        static_cast<float>(bin_z_end),
-    };
+
+    Point<float> bin_end = {static_cast<float>(bin_x_end),
+                            static_cast<float>(bin_y_end),
+                            static_cast<float>(bin_z_end)};
 
     Point<float> current_bin_float = bin_start;
     Point<float> bin_distance = {bin_end.x - bin_start.x,
@@ -179,9 +178,9 @@ auto trace_hash_for_light(int* p_aabb_count_in_bin, AABB* p_aabb_bins,
         std::max<float>({std::abs(bin_distance.x), std::abs(bin_distance.y),
                          std::abs(bin_distance.z)});
 
-    Point<float> bin_step_size = {bin_distance.x / largest_bin_distance,
-                                  bin_distance.y / largest_bin_distance,
-                                  bin_distance.z / largest_bin_distance};
+    Point<float> bin_step_size = {bin_distance.x / largest_bin_distance / 4,
+                                  bin_distance.y / largest_bin_distance / 4,
+                                  bin_distance.z / largest_bin_distance / 4};
 
     for (float ii = 0; ii < largest_bin_distance; ii += 1.f) {
         current_bin_float = {current_bin_float.x + bin_step_size.x,
@@ -194,6 +193,9 @@ auto trace_hash_for_light(int* p_aabb_count_in_bin, AABB* p_aabb_bins,
 
         // Terminate this ray if it is obstructed in this bin.
         if (p_aabb_count_in_bin[index] > 0) {
+            // TODO This hides the fact that sometimes unnecessary intersections
+            // are tested, because `AABB`s aligned with a grid get sorted in
+            // unnecessary bins.
             for (int i = 0; i < p_aabb_count_in_bin[index]; i++) {
                 if (p_aabb_bins[index * sparse_bin_size + i].intersect(ray)) {
                     return false;
@@ -291,16 +293,6 @@ void trace_hash_for_pixel(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
         // `j` is a ray's `y` world-position, iterating upwards.
         for (short j = 0; j < view_height; j++) {
             short world_j = static_cast<short>(view_height - j);
-            Ray this_ray = {
-                .direction_inverse =
-                    {
-                        .x = 0,
-                        .y = -1,  // 1 / -1
-                        .z = 1,   // 1 / 1
-                    },
-                .origin = {.x = i, .y = world_j, .z = 0},
-            };
-
             Pixel this_color = {.color = {255 / 2, 255 / 2, 255 / 2}};
             int intersected_bin_count = 0;
 
@@ -379,7 +371,6 @@ void trace_hash_for_pixel(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                             color_palette[this_sprite
                                               .color[this_sprite_px_index]];
 
-                        // this_color.y = world_j;
                         this_color.y = this_aabb.position.y +
                                        this_aabb.extent.y - sprite_px_row;
                         this_color.z = this_aabb.position.z +
