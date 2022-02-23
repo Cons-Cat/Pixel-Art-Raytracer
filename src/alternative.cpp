@@ -178,9 +178,9 @@ auto trace_hash_for_light(int* p_aabb_count_in_bin, AABB* p_aabb_bins,
         std::max<float>({std::abs(bin_distance.x), std::abs(bin_distance.y),
                          std::abs(bin_distance.z)});
 
-    Point<float> bin_step_size = {bin_distance.x / largest_bin_distance / 4,
-                                  bin_distance.y / largest_bin_distance / 4,
-                                  bin_distance.z / largest_bin_distance / 4};
+    Point<float> bin_step_size = {bin_distance.x / largest_bin_distance,
+                                  bin_distance.y / largest_bin_distance,
+                                  bin_distance.z / largest_bin_distance};
 
     for (float ii = 0; ii < largest_bin_distance; ii += 1.f) {
         current_bin_float = {current_bin_float.x + bin_step_size.x,
