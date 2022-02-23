@@ -1,9 +1,2 @@
-#+TITLE: 2108 Render Project
+#+TITLE: 
 #+AUTHOR: Conscat
-
-* Week 4
-** DONE Depth sprite
-** DONE Color palette
-** DONE Correct 3D depth sorting
-** DONE Z movement
-** TODO Forward renderer
