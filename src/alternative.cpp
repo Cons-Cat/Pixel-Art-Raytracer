@@ -135,7 +135,7 @@ constexpr int hash_volume = hash_width * hash_height * hash_length;
 // Currently, this number is no-op.
 constexpr int entity_count = view_width * view_length;
 
-// The number of AABBs that can fit inside of a single bin. This is an
+// The number of `AABB`s that can fit inside of a single bin. This is an
 // exponentiation of `2` for pushing into a bin with efficient wrapping
 // semantics with bitwise `&`.
 constexpr int sparse_bin_size = 8;
@@ -254,7 +254,7 @@ void count_entities_in_bins(Entities<entity_count>* p_entities,
         int max_z_index =
             std::min(hash_length, (this_max_z_world + 19) / single_bin_area);
 
-        // Place this AABB into every bin that it spans across.
+        // Place this `AABB` into every bin that it spans across.
         for (int bin_x = min_x_index; bin_x <= max_x_index; bin_x++) {
             for (int bin_y = min_y_index; bin_y < max_y_index; bin_y++) {
                 for (int bin_z = min_z_index; bin_z < max_z_index; bin_z++) {
@@ -307,7 +307,7 @@ void trace_hash_for_pixel(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
             int intersected_bin_count = 0;
 
             // The hash frustrum's data is stored such that increasing the
-            // `z` index finds AABBs with proportionally lower `y`
+            // `z` index finds `AABB`s with proportionally lower `y`
             // coordinates, so decrementing `y` by `z` here is unnecessary.
             int bin_x = i / single_bin_area;
 
