@@ -189,8 +189,6 @@ auto trace_hash_for_light(int* p_aabb_count_in_bin, AABB* p_aabb_bins,
                              current_bin_float.z + bin_step_size.z};
         Point<int> current_bin = static_cast<Point<int>>(current_bin_float);
 
-        // TODO: Do not trace outside of the view.
-
         int index =
             index_into_view_hash(current_bin.x, current_bin.y, current_bin.z);
 
