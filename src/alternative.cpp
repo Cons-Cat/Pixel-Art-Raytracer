@@ -193,10 +193,13 @@ auto trace_hash_for_light(int* p_aabb_count_in_bin, AABB* p_aabb_bins,
 
         int index =
             index_into_view_hash(current_bin.x, current_bin.y, current_bin.z);
+
         // Terminate this ray if it is obstructed in this bin.
         if (p_aabb_count_in_bin[index] > 0) {
-            if (p_aabb_bins[index].intersect(ray)) {
-                return false;
+            for (int i = 0; i < p_aabb_count_in_bin[index]; i++) {
+                if (p_aabb_bins[index * sparse_bin_size + i].intersect(ray)) {
+                    return false;
+                }
             }
         }
     }
