@@ -140,6 +140,9 @@ constexpr int entity_count = view_width * view_length;
 // semantics with bitwise `&`.
 constexpr int sparse_bin_size = 8;
 
+int mouse_x;
+int mouse_y;
+
 // The spatial hash is organized near-to-far, by bottom-to-top, by
 // left-to-right.
 // That is generally a cache-friendly layout for this data.
@@ -370,6 +373,9 @@ void trace_hash_for_pixel(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                         this_color.color =
                             color_palette[this_sprite
                                               .color[this_sprite_px_index]];
+                        if (mouse_x == i && mouse_y == j + 1) {
+                            this_color.color = {0, 0, 255, 255};
+                        }
 
                         this_color.y = this_aabb.position.y +
                                        this_aabb.extent.y - sprite_px_row;
@@ -538,7 +544,7 @@ auto main() -> int {
 
     while (true) {
         SDL_Event event;
-        if (SDL_PollEvent(&event)) {
+        while (SDL_PollEvent(&event)) {
             switch (event.type) {
                 case SDL_KEYUP:
                     switch (event.key.keysym.sym) {
@@ -577,8 +583,12 @@ auto main() -> int {
                             break;
                     }
                     break;
+                case SDL_MOUSEMOTION:
+                    SDL_GetMouseState(&mouse_x, &mouse_y);
+                    break;
             }
         }
+        std::cout << mouse_x << ", " << mouse_y << '\n';
 
         // Reset bin counts to `0`.
         memset(p_aabb_count_in_bin, 0,
