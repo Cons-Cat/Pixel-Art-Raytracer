@@ -1,10 +1,4 @@
 #include <SDL2/SDL.h>
-#include <SDL2/SDL_events.h>
-#include <SDL2/SDL_keycode.h>
-#include <SDL2/SDL_rect.h>
-#include <SDL2/SDL_render.h>
-#include <SDL2/SDL_surface.h>
-#include <SDL2/SDL_video.h>
 #include <concepts>
 #include <cstdint>
 #include <iostream>
@@ -373,7 +367,7 @@ void trace_hash_for_pixel(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                         this_color.color =
                             color_palette[this_sprite
                                               .color[this_sprite_px_index]];
-                        if (mouse_x == i && mouse_y == j + 1) {
+                        if (mouse_x == i && mouse_y == j + 2) {
                             this_color.color = {0, 0, 255, 255};
                         }
 
@@ -415,6 +409,44 @@ void trace_hash_for_pixel(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
         }
     }
 };
+
+template <typename T>
+void draw_line(int const x_start, int const y_start, int const x_end,
+               int const y_end, std::invocable<int, int, T> auto pixel_callback,
+               T const pixel_input) {
+    int x_delta = std::abs(x_end - x_start);
+    int y_delta = -std::abs(y_end - y_start);
+
+    int x = x_start;
+    int y = y_start;
+
+    int x_sign = x_start < x_end ? 1 : -1;
+    int y_sign = y_start < y_end ? 1 : -1;
+
+    int error = x_delta + y_delta;
+
+    while (true) {
+        pixel_callback(x, y, pixel_input);
+        if (x == x_end && y == y_end) {
+            return;
+        }
+        int error2 = 2 * error;
+        if (error2 >= y_delta) {
+            if (x == x_end) {
+                return;
+            }
+            error += y_delta;
+            x += x_sign;
+        }
+        if (error2 <= x_delta) {
+            if (y == y_end) {
+                return;
+            }
+            error += x_delta;
+            y += y_sign;
+        }
+    }
+}
 
 auto main() -> int {
     int* p_aabb_index_to_entity_index_map =
@@ -652,6 +684,13 @@ auto main() -> int {
                                std::min<float>(1.f, diffuse + ambient_light);
             }
         }
+
+        draw_line(
+            mouse_x, mouse_y, 0, 0,
+            [&](int x, int y, Color input) {
+                p_texture[x + (y * view_width)] = input;
+            },
+            Color{255, 0, 0, 255});
 
         int texture_pitch;
         SDL_LockTexture(p_sdl_texture, nullptr, p_blit_address, &texture_pitch);
