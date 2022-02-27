@@ -1,10 +1,8 @@
 #include <SDL2/SDL.h>
 #include <concepts>
-#include <cstdint>
 #include <iostream>
 #include <limits>
 #include <new>
-#include <numeric>
 #include <string>
 #include <type_traits>
 #include <vector>
