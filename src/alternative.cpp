@@ -134,6 +134,7 @@ constexpr int sparse_bin_size = 8;
 
 int mouse_x;
 int mouse_y;
+Pixel* mouse_pixel;
 
 // The spatial hash is organized near-to-far, by bottom-to-top, by
 // left-to-right.
@@ -200,6 +201,46 @@ auto trace_hash_for_light(int* p_aabb_count_in_bin, AABB* p_aabb_bins,
     }
 
     return true;
+}
+
+// This function has no bounds checking. If bounds checking is required, it
+// should be handled explicitly in `pixel_callback`.
+template <typename T>
+void draw_line(int const x_start, int const y_start, int const x_end,
+               int const y_end, std::invocable<int, int, T> auto pixel_callback,
+               T const pixel_input) {
+    int x_delta = std::abs(x_end - x_start);
+    int y_delta = -std::abs(y_end - y_start);
+
+    int x = x_start;
+    int y = y_start;
+
+    int x_sign = x < x_end ? 1 : -1;
+    int y_sign = y < y_end ? 1 : -1;
+
+    int error = x_delta + y_delta;
+
+    while (true) {
+        pixel_callback(x, y, pixel_input);
+        if (x == x_end && y == y_end) {
+            return;
+        }
+        int error2 = 2 * error;
+        if (error2 >= y_delta) {
+            if (x == x_end) {
+                return;
+            }
+            error += y_delta;
+            x += x_sign;
+        }
+        if (error2 <= x_delta) {
+            if (y == y_end) {
+                return;
+            }
+            error += x_delta;
+            y += y_sign;
+        }
+    }
 }
 
 // TODO total aabb count.
@@ -365,14 +406,14 @@ void trace_hash_for_pixel(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                         this_color.color =
                             color_palette[this_sprite
                                               .color[this_sprite_px_index]];
-                        if (mouse_x == i && mouse_y == j + 2) {
-                            this_color.color = {0, 0, 255, 255};
-                        }
 
                         this_color.y = this_aabb.position.y +
                                        this_aabb.extent.y - sprite_px_row;
                         this_color.z = this_aabb.position.z +
                                        this_sprite.depth[this_sprite_px_index];
+                        if (i == mouse_x && j == mouse_y) {
+                            mouse_pixel = &this_color;
+                        }
 
                         this_color.normal =
                             this_sprite.normal[this_sprite_px_index];
@@ -407,44 +448,6 @@ void trace_hash_for_pixel(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
         }
     }
 };
-
-template <typename T>
-void draw_line(int const x_start, int const y_start, int const x_end,
-               int const y_end, std::invocable<int, int, T> auto pixel_callback,
-               T const pixel_input) {
-    int x_delta = std::abs(x_end - x_start);
-    int y_delta = -std::abs(y_end - y_start);
-
-    int x = x_start;
-    int y = y_start;
-
-    int x_sign = x_start < x_end ? 1 : -1;
-    int y_sign = y_start < y_end ? 1 : -1;
-
-    int error = x_delta + y_delta;
-
-    while (true) {
-        pixel_callback(x, y, pixel_input);
-        if (x == x_end && y == y_end) {
-            return;
-        }
-        int error2 = 2 * error;
-        if (error2 >= y_delta) {
-            if (x == x_end) {
-                return;
-            }
-            error += y_delta;
-            x += x_sign;
-        }
-        if (error2 <= x_delta) {
-            if (y == y_end) {
-                return;
-            }
-            error += x_delta;
-            y += y_sign;
-        }
-    }
-}
 
 auto main() -> int {
     int* p_aabb_index_to_entity_index_map =
@@ -683,10 +686,15 @@ auto main() -> int {
             }
         }
 
+        // Draw line from this pixel under the cursor to light source.
         draw_line(
-            mouse_x, mouse_y, 0, 0,
+            mouse_x, mouse_pixel->z - mouse_pixel->y, lights[0].x,
+            lights[0].y - lights[0].z,
             [&](int x, int y, Color input) {
-                p_texture[x + (y * view_width)] = input;
+                // Bounds check here prevents segfault.
+                if (x >= 0 && y >= 0 && x < view_width && y < view_height) {
+                    p_texture[x + (y * view_width)] = input;
+                }
             },
             Color{255, 0, 0, 255});
 
