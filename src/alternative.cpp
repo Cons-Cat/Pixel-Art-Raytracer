@@ -411,8 +411,9 @@ void trace_hash_for_pixel(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                                        this_aabb.extent.y - sprite_px_row;
                         this_color.z = this_aabb.position.z +
                                        this_sprite.depth[this_sprite_px_index];
-                        if (i == mouse_x && j == mouse_y) {
-                            mouse_pixel = &this_color;
+
+                        if (mouse_x == i && mouse_y == j) {
+                            mouse_pixel = &p_texture[j * view_width + i];
                         }
 
                         this_color.normal =
@@ -621,7 +622,6 @@ auto main() -> int {
                     break;
             }
         }
-        std::cout << mouse_x << ", " << mouse_y << '\n';
 
         // Reset bin counts to `0`.
         memset(p_aabb_count_in_bin, 0,
@@ -688,8 +688,8 @@ auto main() -> int {
 
         // Draw line from this pixel under the cursor to light source.
         draw_line(
-            mouse_x, mouse_pixel->z - mouse_pixel->y, lights[0].x,
-            lights[0].y - lights[0].z,
+            mouse_x, view_height - (mouse_pixel->y + mouse_pixel->z),
+            lights[0].x, view_height - (lights[0].y + lights[0].z),
             [&](int x, int y, Color input) {
                 // Bounds check here prevents segfault.
                 if (x >= 0 && y >= 0 && x < view_width && y < view_height) {
@@ -697,6 +697,10 @@ auto main() -> int {
                 }
             },
             Color{255, 0, 0, 255});
+
+        std::cout << "MOUSE X/Y: " << mouse_x << ", " << mouse_y << "\n";
+        std::cout << "PIXEL Y/Z: " << mouse_pixel->y << ", " << mouse_pixel->z
+                  << ", " << mouse_pixel << "\n";
 
         int texture_pitch;
         SDL_LockTexture(p_sdl_texture, nullptr, p_blit_address, &texture_pitch);
