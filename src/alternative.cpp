@@ -409,13 +409,15 @@ void trace_hash_for_pixel(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
 
                         this_color.y = this_aabb.position.y +
                                        this_aabb.extent.y - sprite_px_row;
-                        this_color.z = this_aabb.position.z +
-                                       this_sprite.depth[this_sprite_px_index];
 
-                        if (mouse_x == i && mouse_y == j) {
-                            mouse_pixel = &p_texture[j * view_width + i];
+                        // TODO: Come up with something smarter than this.
+                        if (sprite_px_row < this_aabb.extent.y) {
+                            this_color.y =
+                                this_aabb.position.y + this_aabb.extent.y;
                         }
 
+                        this_color.z = this_aabb.position.z +
+                                       this_sprite.depth[this_sprite_px_index];
                         this_color.normal =
                             this_sprite.normal[this_sprite_px_index];
 
@@ -434,20 +436,23 @@ void trace_hash_for_pixel(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
             // `j` decreases as the cursor moves downwards.
             // `i` increases as the cursor moves rightwards.
             p_texture[j * view_width + i] = this_color;
+            if (mouse_x == i && mouse_y == j) {
+                mouse_pixel = &p_texture[j * view_width + i];
+            }
         }
     }
 
-    // Draw hash grid.
-    for (int i = 0; i < view_width; i++) {
-        for (int j = 0; j < view_height; j += single_bin_area) {
-            p_texture[j * view_width + i] = {0, 0, 0};
-        }
-    }
-    for (int i = 0; i < view_width; i += single_bin_area) {
-        for (int j = 0; j < view_height; j++) {
-            p_texture[j * view_width + i] = {0, 0, 0};
-        }
-    }
+    // // Draw hash grid.
+    // for (int i = 0; i < view_width; i++) {
+    //     for (int j = 0; j < view_height; j += single_bin_area) {
+    //         p_texture[j * view_width + i] = {0, 0, 0};
+    //     }
+    // }
+    // for (int i = 0; i < view_width; i += single_bin_area) {
+    //     for (int j = 0; j < view_height; j++) {
+    //         p_texture[j * view_width + i] = {0, 0, 0};
+    //     }
+    // }
 };
 
 auto main() -> int {
@@ -631,6 +636,11 @@ auto main() -> int {
         trace_hash_for_pixel(p_entities, p_aabb_bins, p_aabb_count_in_bin,
                              p_aabb_index_to_entity_index_map, p_pixel_buffer);
 
+        // `mouse_pixel` is mutated by `trace_hash_for_pixel()`.
+        std::cout << "MOUSE X/Y: " << mouse_x << ", " << mouse_y << "\n";
+        std::cout << "PIXEL Y/Z: " << mouse_pixel->y << ", " << mouse_pixel->z
+                  << ", " << mouse_pixel << "\n";
+
         float ambient_light = 0.25f;
         for (int i = 0; i < view_height * view_width; i++) {
             Pixel& this_pixel = p_pixel_buffer[i];
@@ -697,10 +707,6 @@ auto main() -> int {
                 }
             },
             Color{255, 0, 0, 255});
-
-        std::cout << "MOUSE X/Y: " << mouse_x << ", " << mouse_y << "\n";
-        std::cout << "PIXEL Y/Z: " << mouse_pixel->y << ", " << mouse_pixel->z
-                  << ", " << mouse_pixel << "\n";
 
         int texture_pitch;
         SDL_LockTexture(p_sdl_texture, nullptr, p_blit_address, &texture_pitch);
