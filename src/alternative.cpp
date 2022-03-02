@@ -136,6 +136,46 @@ int mouse_x;
 int mouse_y;
 Pixel* mouse_pixel;
 
+// This function has no bounds checking. If bounds checking is required, it
+// should be handled explicitly in `pixel_callback`.
+template <typename T>
+void draw_line(int const x_start, int const y_start, int const x_end,
+               int const y_end, std::invocable<int, int, T> auto pixel_callback,
+               T const pixel_input) {
+    int x_delta = std::abs(x_end - x_start);
+    int y_delta = -std::abs(y_end - y_start);
+
+    int x = x_start;
+    int y = y_start;
+
+    int x_sign = x < x_end ? 1 : -1;
+    int y_sign = y < y_end ? 1 : -1;
+
+    int error = x_delta + y_delta;
+
+    while (true) {
+        pixel_callback(x, y, pixel_input);
+        if (x == x_end && y == y_end) {
+            return;
+        }
+        int error2 = 2 * error;
+        if (error2 >= y_delta) {
+            if (x == x_end) {
+                return;
+            }
+            error += y_delta;
+            x += x_sign;
+        }
+        if (error2 <= x_delta) {
+            if (y == y_end) {
+                return;
+            }
+            error += x_delta;
+            y += y_sign;
+        }
+    }
+}
+
 // The spatial hash is organized near-to-far, by bottom-to-top, by
 // left-to-right.
 // That is generally a cache-friendly layout for this data.
@@ -201,46 +241,6 @@ auto trace_hash_for_light(int* p_aabb_count_in_bin, AABB* p_aabb_bins,
     }
 
     return true;
-}
-
-// This function has no bounds checking. If bounds checking is required, it
-// should be handled explicitly in `pixel_callback`.
-template <typename T>
-void draw_line(int const x_start, int const y_start, int const x_end,
-               int const y_end, std::invocable<int, int, T> auto pixel_callback,
-               T const pixel_input) {
-    int x_delta = std::abs(x_end - x_start);
-    int y_delta = -std::abs(y_end - y_start);
-
-    int x = x_start;
-    int y = y_start;
-
-    int x_sign = x < x_end ? 1 : -1;
-    int y_sign = y < y_end ? 1 : -1;
-
-    int error = x_delta + y_delta;
-
-    while (true) {
-        pixel_callback(x, y, pixel_input);
-        if (x == x_end && y == y_end) {
-            return;
-        }
-        int error2 = 2 * error;
-        if (error2 >= y_delta) {
-            if (x == x_end) {
-                return;
-            }
-            error += y_delta;
-            x += x_sign;
-        }
-        if (error2 <= x_delta) {
-            if (y == y_end) {
-                return;
-            }
-            error += x_delta;
-            y += y_sign;
-        }
-    }
 }
 
 // TODO total aabb count.
