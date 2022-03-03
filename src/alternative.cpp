@@ -218,7 +218,7 @@ auto trace_hash_for_light(int* p_aabb_count_in_bin, AABB* p_aabb_bins,
                                   bin_distance.y / largest_bin_distance,
                                   bin_distance.z / largest_bin_distance};
 
-    for (float ii = 0; ii < largest_bin_distance; ii += 1.f) {
+    for (int i = 0; i < static_cast<int>(largest_bin_distance); i++) {
         current_bin_float = {current_bin_float.x + bin_step_size.x,
                              current_bin_float.y + bin_step_size.y,
                              current_bin_float.z + bin_step_size.z};
@@ -232,8 +232,8 @@ auto trace_hash_for_light(int* p_aabb_count_in_bin, AABB* p_aabb_bins,
             // TODO This hides the fact that sometimes unnecessary intersections
             // are tested, because `AABB`s aligned with a grid get sorted in
             // unnecessary bins.
-            for (int i = 0; i < p_aabb_count_in_bin[index]; i++) {
-                if (p_aabb_bins[index * sparse_bin_size + i].intersect(ray)) {
+            for (int j = 0; j < p_aabb_count_in_bin[index]; j++) {
+                if (p_aabb_bins[index * sparse_bin_size + j].intersect(ray)) {
                     return false;
                 }
             }
