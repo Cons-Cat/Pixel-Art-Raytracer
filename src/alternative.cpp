@@ -193,8 +193,8 @@ auto world_to_view_hash_index(int x, int y, int z) -> int {
 auto trace_hash_for_light(int* p_aabb_count_in_bin, AABB* p_aabb_bins,
                           int const bin_x_start, int const bin_y_start,
                           int const bin_z_start, int const bin_x_end,
-                          int const bin_y_end, int const bin_z_end, Ray& ray)
-    -> bool {
+                          int const bin_y_end, int const bin_z_end,
+                          int hash_entity_index, Ray& ray) -> bool {
     // TODO: Benchmark against integer solution.
     Point<float> bin_start = {static_cast<float>(bin_x_start),
                               static_cast<float>(bin_y_start),
@@ -218,26 +218,49 @@ auto trace_hash_for_light(int* p_aabb_count_in_bin, AABB* p_aabb_bins,
                                   bin_distance.y / largest_bin_distance,
                                   bin_distance.z / largest_bin_distance};
 
-    for (int i = 0; i < static_cast<int>(largest_bin_distance); i++) {
-        current_bin_float = {current_bin_float.x + bin_step_size.x,
-                             current_bin_float.y + bin_step_size.y,
-                             current_bin_float.z + bin_step_size.z};
-        Point<int> current_bin = static_cast<Point<int>>(current_bin_float);
+    int counter = 0;
+    int start = index_into_view_hash(bin_x_start, bin_y_start, bin_z_start);
 
-        int index =
+    for (int i = 0; i < static_cast<int>(largest_bin_distance);) {
+        if (counter == 0) {
+            current_bin_float.x += bin_step_size.x;
+            counter++;
+        } else if (counter == 1) {
+            current_bin_float.y += bin_step_size.y;
+            counter++;
+        } else {
+            current_bin_float.z += bin_step_size.z;
+            counter = 0;
+            i++;
+        }
+
+        // current_bin_float = {current_bin_float.x + bin_step_size.x,
+        //                      current_bin_float.y + bin_step_size.y,
+        //                      current_bin_float.z + bin_step_size.z};
+
+        Point<int> current_bin = static_cast<Point<int>>(current_bin_float);
+        int hash_bin_index =
             index_into_view_hash(current_bin.x, current_bin.y, current_bin.z);
 
         // Terminate this ray if it is obstructed in this bin.
-        if (p_aabb_count_in_bin[index] > 0) {
-            // TODO This hides the fact that sometimes unnecessary intersections
-            // are tested, because `AABB`s aligned with a grid get sorted in
-            // unnecessary bins.
-            for (int j = 0; j < p_aabb_count_in_bin[index]; j++) {
-                if (p_aabb_bins[index * sparse_bin_size + j].intersect(ray)) {
+        if (p_aabb_count_in_bin[hash_bin_index] > 0) {
+            // TODO This hides the fact that sometimes unnecessary
+            // intersections are tested, because `AABB`s aligned to the grid
+            // get sorted in superfluous bins.
+            for (int j = 0; j < p_aabb_count_in_bin[hash_bin_index]; j++) {
+                int this_entity_index = hash_bin_index * sparse_bin_size + j;
+                if (this_entity_index == hash_entity_index) {
+                    goto self_intersection;
+                }
+
+                if (p_aabb_bins[this_entity_index].intersect(ray)) {
                     return false;
                 }
             }
         }
+
+self_intersection:
+        continue;
     }
 
     return true;
@@ -344,37 +367,33 @@ void trace_hash_for_pixel(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                 bool has_intersected = false;
                 short bin_y = static_cast<short>(j / single_bin_area);
 
-                int entities_in_this_bin =
-                    p_aabb_count_in_bin[index_into_view_hash(bin_x, bin_y,
-                                                             bin_z)];
+                int hash_bin_index = index_into_view_hash(bin_x, bin_y, bin_z);
+                int entities_in_this_bin = p_aabb_count_in_bin[hash_bin_index];
                 if (entities_in_this_bin == 0) {
                     intersected_bin_count = 0;
                 }
+                int hash_entitys_bin_index = hash_bin_index * sparse_bin_size;
 
-                for (int this_bin_entity_index = 0;
-                     this_bin_entity_index < entities_in_this_bin;
-                     this_bin_entity_index++) {
-                    AABB& this_aabb =
-                        p_aabb_bins[index_into_view_hash(bin_x, bin_y, bin_z) *
-                                        sparse_bin_size +
-                                    this_bin_entity_index];
+                for (int k = 0; k < entities_in_this_bin; k++) {
+                    int hash_entity_index = hash_entitys_bin_index + k;
+                    AABB& this_aabb = p_aabb_bins[hash_entity_index];
 
-                    // Intersect ray with this `AABB`. Because we know that the
-                    // ray's slope is <0, -1, 1>, a rigorous intersection test
-                    // is unnecessary.
+                    // Intersect this ray with this `AABB`. Because the ray's
+                    // slope is <0, -1, 1>, a rigorous intersection test is
+                    // unnecessary.
                     if (i >= this_aabb.position.x &&
                         i < this_aabb.position.x + this_aabb.extent.x &&
+                        // The point that `y` should intersect increases
+                        // linearly with `z`.
                         world_j > this_aabb.position.y + this_aabb.position.z &&
                         world_j <= this_aabb.position.y + this_aabb.extent.y +
                                        this_aabb.position.z +
                                        this_aabb.extent.z) {
-                        int this_entity_index = p_aabb_index_to_entity_index_map
-                            [index_into_view_hash(bin_x, bin_y, bin_z) *
-                                 sparse_bin_size +
-                             this_bin_entity_index];
+                        int this_entity_index =
+                            p_aabb_index_to_entity_index_map[hash_entity_index];
 
                         Sprite& this_sprite =
-                            p_entities->sprites[this_bin_entity_index];
+                            p_entities->sprites[this_entity_index];
 
                         int sprite_px_row =
                             this_aabb.position.y + this_aabb.extent.y +
@@ -387,14 +406,10 @@ void trace_hash_for_pixel(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                         // Depth increases as `y` increases, and it
                         // decreases as `z` increases.
                         int this_depth =
-                            this_aabb.position.y -
-                            this_aabb.position.z
-                            // Position along this `AABB`'s `y`
-                            // axis:
-                            +
-                            std::min<int>(0, this_aabb.extent.y - sprite_px_row)
-                            // Position along this `AABB`'s `z`
-                            // axis:
+                            this_aabb.position.y - this_aabb.position.z +
+                            // Position along this `AABB`'s `y` axis:
+                            std::min(0, this_aabb.extent.y - sprite_px_row)
+                            // Position along this `AABB`'s `z` axis:
                             - this_sprite.depth[this_sprite_px_index];
 
                         // Store the pixel with the greatest depth.
@@ -403,23 +418,23 @@ void trace_hash_for_pixel(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                         }
                         closest_entity_depth = this_depth;
 
+                        this_color.normal =
+                            this_sprite.normal[this_sprite_px_index];
+
                         this_color.color =
                             color_palette[this_sprite
                                               .color[this_sprite_px_index]];
 
-                        this_color.y = this_aabb.position.y +
-                                       this_aabb.extent.y - sprite_px_row;
-
-                        // TODO: Come up with something smarter than this.
-                        if (sprite_px_row < this_aabb.extent.y) {
-                            this_color.y =
-                                this_aabb.position.y + this_aabb.extent.y;
-                        }
+                        this_color.y =
+                            this_aabb.position.y + this_aabb.extent.y +
+                            this_aabb.extent.z - sprite_px_row -
+                            // TODO: Solve magic number `40`.
+                            this_sprite.depth[this_sprite_px_index] + 40;
 
                         this_color.z = this_aabb.position.z +
                                        this_sprite.depth[this_sprite_px_index];
-                        this_color.normal =
-                            this_sprite.normal[this_sprite_px_index];
+
+                        this_color.entity_index = hash_entity_index;
 
                         has_intersected = true;
                     }
@@ -679,16 +694,19 @@ auto main() -> int {
             if (trace_hash_for_light(p_aabb_count_in_bin, p_aabb_bins,
                                      ray_bin_x, ray_bin_y, ray_bin_z,
                                      light_bin_x, light_bin_y, light_bin_z,
-                                     this_ray)) {
-                // Get the dot product between this pixel's normal and the light
-                // ray's incident vector.
+                                     this_pixel.entity_index, this_ray)) {
+                // Get the dot product between this pixel's normal and
+                // the light ray's incident vector.
                 float diffuse = std::max<float>(
                     0, normal.x * towards_light.x + normal.y * towards_light.y +
                            normal.z * towards_light.z);
                 // Multiply diffuse by distance to the light source.
-                // * (static_cast<float>(std::abs(world_x - lights[0].x) +
-                //                       std::abs(world_y - lights[0].y) +
-                //                       std::abs(world_z - lights[0].z)) /
+                // * (static_cast<float>(std::abs(world_x - lights[0].x)
+                // +
+                //                       std::abs(world_y - lights[0].y)
+                // +
+                //                       std::abs(world_z - lights[0].z))
+                // /
                 //    200.f);
 
                 p_texture[i] = this_pixel.color *

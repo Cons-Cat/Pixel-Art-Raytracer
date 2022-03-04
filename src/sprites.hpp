@@ -50,9 +50,10 @@ struct Vector {
 };
 
 struct Pixel {
-    int y, z;
     Vector normal;
     Color color;
+    int y, z;
+    int entity_index;
 };
 
 Color color_palette[] = {
