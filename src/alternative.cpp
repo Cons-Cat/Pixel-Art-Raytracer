@@ -188,66 +188,6 @@ auto world_to_view_hash_index(int x, int y, int z) -> int {
     return index_into_view_hash(int_x, int_y, int_z);
 }
 
-auto trace_hash_for_light(int* p_aabb_count_in_bin, AABB* p_aabb_bins,
-                          int const bin_x_start, int const bin_y_start,
-                          int const bin_z_start, int const bin_x_end,
-                          int const bin_y_end, int const bin_z_end, Ray& ray)
-    -> bool {
-    // TODO: Benchmark against integer solution.
-    Point<float> bin_start = {static_cast<float>(bin_x_start),
-                              static_cast<float>(bin_y_start),
-                              static_cast<float>(bin_z_start)};
-
-    Point<float> bin_end = {static_cast<float>(bin_x_end),
-                            static_cast<float>(bin_y_end),
-                            static_cast<float>(bin_z_end)};
-
-    Point<float> current_bin_float = bin_start;
-    Point<float> bin_distance = {bin_end.x - bin_start.x,
-                                 bin_end.y - bin_start.y,
-                                 bin_end.z - bin_start.z};
-
-    // TODO: This is an inefficient initializer list.
-    float largest_bin_distance =
-        std::max<float>({std::abs(bin_distance.x), std::abs(bin_distance.y),
-                         std::abs(bin_distance.z)});
-
-    Point<float> bin_step_size = {bin_distance.x / largest_bin_distance,
-                                  bin_distance.y / largest_bin_distance,
-                                  bin_distance.z / largest_bin_distance};
-
-    int counter = 0;
-    int start = index_into_view_hash(bin_x_start, bin_y_start, bin_z_start);
-
-    for (int i = 0; i < static_cast<int>(largest_bin_distance); i++) {
-        current_bin_float = {current_bin_float.x + bin_step_size.x,
-                             current_bin_float.y + bin_step_size.y,
-                             current_bin_float.z + bin_step_size.z};
-
-        Point<int> current_bin = static_cast<Point<int>>(current_bin_float);
-        int hash_bin_index =
-            index_into_view_hash(current_bin.x, current_bin.y, current_bin.z);
-
-        // Terminate this ray if it is obstructed in this bin.
-        if (p_aabb_count_in_bin[hash_bin_index] > 0) {
-            // TODO: This hides the fact that sometimes unnecessary
-            // intersections are tested, because `AABB`s aligned to the grid
-            // get sorted in superfluous bins.
-            for (int j = 0; j < p_aabb_count_in_bin[hash_bin_index]; j++) {
-                int this_entity_index = hash_bin_index * sparse_bin_size + j;
-                if (p_aabb_bins[this_entity_index].intersect(ray)) {
-                    return false;
-                }
-            }
-        }
-
-self_intersection:
-        continue;
-    }
-
-    return true;
-}
-
 // TODO: total aabb count.
 AABB* p_aabb_flatbins = new (std::nothrow) AABB[hash_volume];
 int total_entities_in_bins = 0;
@@ -326,7 +266,7 @@ void count_entities_in_bins(Entities<entity_count>* p_entities,
             }
         }
     }
-};
+}
 
 void trace_hash_for_pixel(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                           int* p_aabb_count_in_bin,
@@ -452,7 +392,67 @@ void trace_hash_for_pixel(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
     //         p_texture[j * view_width + i] = {0, 0, 0};
     //     }
     // }
-};
+}
+
+auto trace_hash_for_light(int* p_aabb_count_in_bin, AABB* p_aabb_bins,
+                          int const bin_x_start, int const bin_y_start,
+                          int const bin_z_start, int const bin_x_end,
+                          int const bin_y_end, int const bin_z_end, Ray& ray)
+    -> bool {
+    // TODO: Benchmark against integer solution.
+    Point<float> bin_start = {static_cast<float>(bin_x_start),
+                              static_cast<float>(bin_y_start),
+                              static_cast<float>(bin_z_start)};
+
+    Point<float> bin_end = {static_cast<float>(bin_x_end),
+                            static_cast<float>(bin_y_end),
+                            static_cast<float>(bin_z_end)};
+
+    Point<float> current_bin_float = bin_start;
+    Point<float> bin_distance = {bin_end.x - bin_start.x,
+                                 bin_end.y - bin_start.y,
+                                 bin_end.z - bin_start.z};
+
+    // TODO: This is an inefficient initializer list.
+    float largest_bin_distance =
+        std::max<float>({std::abs(bin_distance.x), std::abs(bin_distance.y),
+                         std::abs(bin_distance.z)});
+
+    Point<float> bin_step_size = {bin_distance.x / largest_bin_distance,
+                                  bin_distance.y / largest_bin_distance,
+                                  bin_distance.z / largest_bin_distance};
+
+    int counter = 0;
+    int start = index_into_view_hash(bin_x_start, bin_y_start, bin_z_start);
+
+    for (int i = 0; i < static_cast<int>(largest_bin_distance); i++) {
+        current_bin_float = {current_bin_float.x + bin_step_size.x,
+                             current_bin_float.y + bin_step_size.y,
+                             current_bin_float.z + bin_step_size.z};
+
+        Point<int> current_bin = static_cast<Point<int>>(current_bin_float);
+        int hash_bin_index =
+            index_into_view_hash(current_bin.x, current_bin.y, current_bin.z);
+
+        // Terminate this ray if it is obstructed in this bin.
+        if (p_aabb_count_in_bin[hash_bin_index] > 0) {
+            // TODO: This hides the fact that sometimes unnecessary
+            // intersections are tested, because `AABB`s aligned to the grid
+            // get sorted in superfluous bins.
+            for (int j = 0; j < p_aabb_count_in_bin[hash_bin_index]; j++) {
+                int this_entity_index = hash_bin_index * sparse_bin_size + j;
+                if (p_aabb_bins[this_entity_index].intersect(ray)) {
+                    return false;
+                }
+            }
+        }
+
+self_intersection:
+        continue;
+    }
+
+    return true;
+}
 
 auto main() -> int {
     int* p_aabb_index_to_entity_index_map =
