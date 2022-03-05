@@ -634,11 +634,7 @@ auto main() -> int {
                         case SDLK_ESCAPE:
                             goto exit_loop;
                             break;
-                        case SDLK_a:
-                            lights[0].z -= 5;
-                            break;
-                        case SDLK_k:
-                            lights[0].z += 5;
+                        default:
                             break;
                     }
                     break;
@@ -661,6 +657,24 @@ auto main() -> int {
                             break;
                         case SDLK_PAGEUP:
                             p_entities->aabbs[0].position.y += 5;
+                            break;
+                        case SDLK_a:
+                            lights[0].z -= 5;
+                            break;
+                        case SDLK_k:
+                            lights[0].z += 5;
+                            break;
+                        case SDLK_j:
+                            lights[0].y -= 5;
+                            break;
+                        case SDLK_u:
+                            lights[0].y += 5;
+                            break;
+                        case SDLK_h:
+                            lights[0].x -= 5;
+                            break;
+                        case SDLK_o:
+                            lights[0].x += 5;
                             break;
                         default:
                             break;
