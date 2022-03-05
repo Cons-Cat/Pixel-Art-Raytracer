@@ -771,17 +771,3 @@ exit_loop:
     // Segfaults:
     // delete[] p_blit;
 }
-
-/* Create an entity.
- * Create a bounding volume hierarchy of AABBs.
- * Give entities an Oklab value.
- *
- * Iterate through every pixel in window:
- ** Travel to first AABB bounding an entity.
- ** Assign pixel to that entity's color.
- *
- * Iterate through every pixel in window:
- ** Convert pixel color to RGB.
- *
- * Stage pixel buffer memory.
- * Invoke trivial rasterization pipeline. */
