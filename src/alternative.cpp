@@ -112,16 +112,13 @@ struct Entities {
     }
 };
 
-// The area of a bin's face is hard-coded to 20 to perfectly conform to the area
-// of a tile's sprite.
-constexpr short single_bin_area = 20;
-
+constexpr short single_bin_cubic_size = 40;
 constexpr int view_width = 480;
 constexpr int view_height = 320;
 constexpr int view_length = 320;
-constexpr int hash_width = (view_width) / single_bin_area;
-constexpr int hash_height = (view_height) / single_bin_area;
-constexpr int hash_length = (view_length) / single_bin_area;
+constexpr int hash_width = (view_width) / single_bin_cubic_size;
+constexpr int hash_height = (view_height) / single_bin_cubic_size;
+constexpr int hash_length = (view_length) / single_bin_cubic_size;
 constexpr int hash_volume = hash_width * hash_height * hash_length;
 
 // Currently, this number is no-op.
@@ -184,9 +181,9 @@ auto index_into_view_hash(int x, int y, int z) -> int {
 }
 
 auto world_to_view_hash_index(int x, int y, int z) -> int {
-    int int_x = std::max(0, std::min(view_width, x / single_bin_area));
-    int int_y = std::max(0, std::min(view_height, y / single_bin_area));
-    int int_z = std::max(0, std::min(view_length, z / single_bin_area));
+    int int_x = std::max(0, std::min(view_width, x / single_bin_cubic_size));
+    int int_y = std::max(0, std::min(view_height, y / single_bin_cubic_size));
+    int int_z = std::max(0, std::min(view_length, z / single_bin_cubic_size));
     return index_into_view_hash(int_x, int_y, int_z);
 }
 
@@ -273,32 +270,36 @@ void count_entities_in_bins(Entities<entity_count>* p_entities,
         // Skip this entity if it fits entirely outside of the view bounds.
         if ((this_max_x_world < 0) || (this_min_x_world >= view_width) ||
             (this_max_y_world < 0 - this_max_z_world) ||
-            (this_min_y_world >= view_height - this_min_z_world + 20) ||
-            (this_max_z_world < -this_aabb.extent.z - 20) ||
-            (this_min_z_world > view_length + 20)) {
+            (this_min_y_world >=
+             view_height - this_min_z_world + single_bin_cubic_size) ||
+            (this_max_z_world < -this_aabb.extent.z - single_bin_cubic_size) ||
+            (this_min_z_world > view_length + single_bin_cubic_size)) {
             continue;
         }
 
         // Get the cells that this `AABB` fits into.
-        int min_x_index = std::max(0, this_min_x_world / single_bin_area);
-        int min_y_index = std::max<int>(
-            0, (view_height - this_max_y_world - this_max_z_world) /
-                   single_bin_area);
-        int min_z_index = std::max(0, this_min_z_world / single_bin_area);
+        int min_x_index = std::max(0, this_min_x_world / single_bin_cubic_size);
+        int min_y_index =
+            std::max(0, (view_height - this_max_y_world - this_max_z_world) /
+                            single_bin_cubic_size);
+        int min_z_index = std::max(0, this_min_z_world / single_bin_cubic_size);
 
-        int max_x_index =
-            std::min(hash_width - 1, this_max_x_world / single_bin_area);
+        int max_x_index = std::min(
+            hash_width, (this_max_x_world + single_bin_cubic_size - 1) /
+                            single_bin_cubic_size);
         int max_y_index = std::min(
-            // `max_y_index` is rounded up to the nearest multiple of `20`.
-            hash_height,
-            (view_height - this_min_y_world - this_min_z_world + 19) /
-                single_bin_area);
-        // `max_z_index` is rounded up to the nearest multiple of `20`.
-        int max_z_index =
-            std::min(hash_length, (this_max_z_world + 19) / single_bin_area);
+            // `max_y_index` is rounded up to the nearest multiple of a bin's
+            // size.
+            hash_height, (view_height - this_min_y_world - this_min_z_world +
+                          single_bin_cubic_size - 1) /
+                             single_bin_cubic_size);
+        // `max_z_index` is rounded up to the nearest multiple of a bin's size.
+        int max_z_index = std::min(
+            hash_length, (this_max_z_world + single_bin_cubic_size - 1) /
+                             single_bin_cubic_size);
 
         // Place this `AABB` into every bin that it spans across.
-        for (int bin_x = min_x_index; bin_x <= max_x_index; bin_x++) {
+        for (int bin_x = min_x_index; bin_x < max_x_index; bin_x++) {
             for (int bin_y = min_y_index; bin_y < max_y_index; bin_y++) {
                 for (int bin_z = min_z_index; bin_z < max_z_index; bin_z++) {
                     int this_bin_count =
@@ -342,14 +343,14 @@ void trace_hash_for_pixel(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
             // The hash frustrum's data is stored such that increasing the
             // `z` index finds `AABB`s with proportionally lower `y`
             // coordinates, so decrementing `y` by `z` here is unnecessary.
-            int bin_x = i / single_bin_area;
+            int bin_x = i / single_bin_cubic_size;
 
             int closest_entity_depth = std::numeric_limits<int>::min();
 
             // `bin_z` is a ray's hash-space position casting forwards.
             for (short bin_z = 0; bin_z < hash_length; bin_z++) {
                 bool has_intersected = false;
-                short bin_y = static_cast<short>(j / single_bin_area);
+                short bin_y = static_cast<short>(j / single_bin_cubic_size);
 
                 int hash_bin_index = index_into_view_hash(bin_x, bin_y, bin_z);
                 int entities_in_this_bin = p_aabb_count_in_bin[hash_bin_index];
@@ -383,6 +384,8 @@ void trace_hash_for_pixel(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                             this_aabb.position.y + this_aabb.extent.y +
                             this_aabb.position.z + this_aabb.extent.z - world_j;
 
+                        // TODO: Make this more generic.
+                        // `20` is the width of this sprite in pixels.
                         int this_sprite_px_index = sprite_px_row * 20 +
                                                    // Sprite pixel's column:
                                                    (i - this_aabb.position.x);
@@ -412,8 +415,7 @@ void trace_hash_for_pixel(Entities<entity_count>* p_entities, AABB* p_aabb_bins,
                         this_color.y =
                             this_aabb.position.y + this_aabb.extent.y +
                             this_aabb.extent.z - sprite_px_row -
-                            // TODO: Solve magic number `20`.
-                            this_sprite.depth[this_sprite_px_index] + 20;
+                            this_sprite.depth[this_sprite_px_index] + 0;
                         this_color.z = this_aabb.position.z +
                                        this_sprite.depth[this_sprite_px_index];
 
@@ -659,14 +661,15 @@ auto main() -> int {
                                        static_cast<short>(world_y),
                                        static_cast<short>(world_z)}};
 
-            int ray_bin_x = world_x / single_bin_area;
-            int ray_bin_y = (view_height - world_y - world_z) / single_bin_area;
-            int ray_bin_z = world_z / single_bin_area;
+            int ray_bin_x = world_x / single_bin_cubic_size;
+            int ray_bin_y =
+                (view_height - world_y - world_z) / single_bin_cubic_size;
+            int ray_bin_z = world_z / single_bin_cubic_size;
 
-            int light_bin_x = lights[0].x / single_bin_area;
-            int light_bin_y =
-                (view_height - lights[0].y - lights[0].z) / single_bin_area;
-            int light_bin_z = lights[0].z / single_bin_area;
+            int light_bin_x = lights[0].x / single_bin_cubic_size;
+            int light_bin_y = (view_height - lights[0].y - lights[0].z) /
+                              single_bin_cubic_size;
+            int light_bin_z = lights[0].z / single_bin_cubic_size;
 
             // Set the texture to an ambient brightness by default.
             p_texture[i] = this_pixel.color * ambient_light;
@@ -738,11 +741,11 @@ auto main() -> int {
 
         for (int j = 0; j < hash_height; j++) {
             for (int k = 0; k < hash_length; k++) {
-                std::cout
-                    << p_aabb_count_in_bin[index_into_view_hash(
-                           p_entities->aabbs[0].position.x / single_bin_area, j,
-                           k)]
-                    << " ";
+                std::cout << p_aabb_count_in_bin[index_into_view_hash(
+                                 p_entities->aabbs[0].position.x /
+                                     single_bin_cubic_size,
+                                 j, k)]
+                          << " ";
             }
             std::cout << "\n";
         }
