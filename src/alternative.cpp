@@ -83,7 +83,8 @@ struct alignas(16) AABB {
     }
 };
 
-// Alignment pads this out from 12 bytes to 16.
+// Alignment pads this out from `12` bytes to `16`.
+// `16` divides evenly into a 64-byte cache line.
 static_assert(sizeof(AABB) == 16);
 
 constexpr Sprite tile_single = make_tile_floor();
@@ -112,13 +113,13 @@ struct Entities {
     }
 };
 
-constexpr short single_bin_cubic_size = 40;
+constexpr int single_bin_cubic_size = 40;
 constexpr int view_width = 480;
 constexpr int view_height = 320;
 constexpr int view_length = 320;
-constexpr int hash_width = (view_width) / single_bin_cubic_size;
-constexpr int hash_height = (view_height) / single_bin_cubic_size;
-constexpr int hash_length = (view_length) / single_bin_cubic_size;
+constexpr int hash_width = view_width / single_bin_cubic_size;
+constexpr int hash_height = view_height / single_bin_cubic_size;
+constexpr int hash_length = view_length / single_bin_cubic_size;
 constexpr int hash_volume = hash_width * hash_height * hash_length;
 
 // Currently, this number is no-op.
@@ -229,7 +230,7 @@ auto trace_hash_for_light(int* p_aabb_count_in_bin, AABB* p_aabb_bins,
 
         // Terminate this ray if it is obstructed in this bin.
         if (p_aabb_count_in_bin[hash_bin_index] > 0) {
-            // TODO This hides the fact that sometimes unnecessary
+            // TODO: This hides the fact that sometimes unnecessary
             // intersections are tested, because `AABB`s aligned to the grid
             // get sorted in superfluous bins.
             for (int j = 0; j < p_aabb_count_in_bin[hash_bin_index]; j++) {
@@ -247,7 +248,7 @@ self_intersection:
     return true;
 }
 
-// TODO total aabb count.
+// TODO: total aabb count.
 AABB* p_aabb_flatbins = new (std::nothrow) AABB[hash_volume];
 int total_entities_in_bins = 0;
 
