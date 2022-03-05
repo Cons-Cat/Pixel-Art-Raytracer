@@ -17,15 +17,16 @@ struct Color {
 };
 
 // `Vector` holds three `float`s which represent its orientation.
+template <typename T = float>
 struct Vector {
-    float x, y, z;
+    T x, y, z;
 
-    auto magnitude() -> float {
+    auto magnitude() -> T {
         return std::abs(x) + std::abs(y) + std::abs(z);
     }
 
     auto normalize() -> Vector {
-        float length = std::abs(x) + std::abs(y) + std::abs(z);
+        T length = std::abs(x) + std::abs(y) + std::abs(z);
         return Vector{
             .x = x / length,
             .y = y / length,
@@ -34,14 +35,14 @@ struct Vector {
     }
 
     operator Color() const {
-        float length = std::abs(x) + std::abs(y) + std::abs(z);
-        float positive_x = x + length;
-        float positive_y = y + length;
-        float positive_z = z + length;
-        float normal_length = positive_x + positive_y + positive_z;
-        float normal_x = positive_x / normal_length;
-        float normal_y = positive_y / normal_length;
-        float normal_z = positive_z / normal_length;
+        T length = std::abs(x) + std::abs(y) + std::abs(z);
+        T positive_x = x + length;
+        T positive_y = y + length;
+        T positive_z = z + length;
+        T normal_length = positive_x + positive_y + positive_z;
+        float normal_x = (float)positive_x / (float)normal_length;
+        float normal_y = (float)positive_y / (float)normal_length;
+        float normal_z = (float)positive_z / (float)normal_length;
 
         return Color{static_cast<unsigned char>(normal_x * 255),
                      static_cast<unsigned char>(normal_y * 255),
@@ -50,7 +51,7 @@ struct Vector {
 };
 
 struct Pixel {
-    Vector normal;
+    Vector<float> normal;
     Color color;
     int y, z;
     int entity_index;
@@ -66,7 +67,7 @@ Color color_palette[] = {
 struct Sprite {
     std::array<int, 20 * 40> color;
     std::array<int, 20 * 40> depth;
-    std::array<Vector, 20 * 40> normal;
+    std::array<Vector<float>, 20 * 40> normal;
 };
 
 constexpr auto make_tile_floor = []() -> Sprite {
@@ -196,7 +197,7 @@ constexpr auto make_tile_floor = []() -> Sprite {
         0,  0,  0,  0,  0,  0,  0,  0,  0,  0,  //
     };
 
-    constexpr std::array<Vector, 20 * 40> normal = {{
+    constexpr std::array<Vector<float>, 20 * 40> normal = {{
         {0, 1, 0},  {0, 1, 0},  {0, 1, 0},  {0, 1, 0},  {0, 1, 0},
         {0, 1, 0},  {0, 1, 0},  {0, 1, 0},  {0, 1, 0},  {0, 1, 0},
         {0, 1, 0},  {0, 1, 0},  {0, 1, 0},  {0, 1, 0},  {0, 1, 0},
