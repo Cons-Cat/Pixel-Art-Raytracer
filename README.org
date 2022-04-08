@@ -2,3 +2,7 @@
 #+AUTHOR: Conscat
 
 [[./gif.gif]]
+
+I gave a talk early 2022 about some of the technical details involved in this project. I have since decided that this approach, ray tracing with a spatial hash, is fundamentally flawed because finding precise intersections from arbitrary positions with arbitrary vectors is extremely challenging to do performantly. I had intended to vectorize and multithread this raytracer, but it is evident that meeting my performance goals is not feasible this way. I will be exploring other acceleration structures in the future.
+
+[[https://youtu.be/WIhC37Ym4To][Raytracing Pixel Art - Low City Pony Con 2022]]
